@@ -1,5 +1,6 @@
 from src.blockchain.block import Block
 
+
 def get_block_object_from_dict(block_dict):
     """
     Blocks are sometimes represented in their dictionary form to allow JSON serialisation
