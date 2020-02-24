@@ -19,7 +19,6 @@ class MaintenanceRecord:
         reading_file = True
 
         try:
-
             file = open(f"{os.getcwd()}/{self.record_filename}", "rb")
         except (OSError, IOError) as e:
             print(str(e))
