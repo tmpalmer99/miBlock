@@ -1,8 +1,8 @@
 import time
 import os
 import json
-from src.blockchain.block import Block
-from src.blockchain.block_utils import get_block_object_from_dict
+from blockchain.block import Block
+from blockchain.block_utils import get_block_object_from_dict
 
 
 class Blockchain:
@@ -50,7 +50,7 @@ class Blockchain:
         """
         try:
             self.chain = json.load(open(self.blocks_directory + "/blocks.json", "r"))
-        except IOError as e:
+        except IOError:
             return False
         else:
             print("[OK] Blocks were successfully loaded.")
