@@ -1,4 +1,4 @@
-from src.block import Block
+from src.blockchain.block import Block
 
 
 def get_block_object_from_dict(block_dict):

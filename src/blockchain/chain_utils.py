@@ -1,4 +1,4 @@
-import src.block_utils as b_utils
+import src.blockchain.block_utils as b_utils
 from pathlib import Path
 import json
 import os
@@ -41,4 +41,4 @@ def load_chain_from_storage():
 
 
 def get_app_root_directory():
-    return Path(__file__).parent.parent
+    return Path(__file__).parent.parent.parent

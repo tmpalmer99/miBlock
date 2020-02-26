@@ -1,9 +1,9 @@
-import time
 import os
+import time
 import json
-from block import Block
-import block_utils
-import chain_utils
+from src.blockchain.block import Block
+import src.blockchain.block_utils as block_utils
+import src.blockchain.chain_utils as chain_utils
 
 
 class Blockchain:
@@ -17,7 +17,6 @@ class Blockchain:
         """
 
         self.chain = chain_utils.load_chain_from_storage()
-        print(len(self.chain))
         if len(self.chain) == 0:
             self.init_chain()
 
@@ -27,7 +26,7 @@ class Blockchain:
         """
         self.generate_genesis_block()
         app_root_dir = chain_utils.get_app_root_directory()
-        os.chdir("..")
+        os.chdir("../..")
         os.mkdir("data")
         blocks_json_file = open(str(app_root_dir) + "/data/blocks.json", "w")
         json.dump(self.chain, blocks_json_file)
