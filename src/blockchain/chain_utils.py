@@ -1,7 +1,6 @@
 import src.blockchain.block_utils as b_utils
 from pathlib import Path
 import json
-import os
 
 
 # A utility function to traverse the chain and return the block with given index

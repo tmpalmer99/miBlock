@@ -1,6 +1,3 @@
-import src.blockchain.chain_utils
-
-
 class RecordPool:
 
     def __init__(self):

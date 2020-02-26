@@ -108,6 +108,3 @@ class Blockchain:
         # Attempt to add the block to the chain
         self.add_block(new_block)
         return new_block.index
-
-
-blockchain = Blockchain()
