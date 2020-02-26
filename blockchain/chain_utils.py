@@ -1,4 +1,4 @@
-import src.blockchain.block_utils as b_utils
+import blockchain.block_utils as b_utils
 from pathlib import Path
 import json
 
@@ -35,9 +35,8 @@ def load_chain_from_storage():
         return []
     else:
         print("[OK] Blocks were successfully loaded.")
-        print(chain)
         return chain
 
 
 def get_app_root_directory():
-    return Path(__file__).parent.parent.parent
+    return Path(__file__).parent.parent

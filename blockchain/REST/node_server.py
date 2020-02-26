@@ -1,6 +1,6 @@
 from flask import Flask
-from src.blockchain.chain import Blockchain
-from src.blockchain.record_pool import RecordPool
+from blockchain.chain import Blockchain
+from blockchain.record_pool import RecordPool
 
 app = Flask(__name__)
 
