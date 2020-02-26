@@ -32,12 +32,6 @@ class Block:
         record_list = []
         # Get a JSON representation for each record in the block
         for record in self.records:
-            # data = {
-            #     "aircraft_registration_number": record.aircraft_reg,
-            #     "date_of_record": record.date_of_record,
-            #     "record_filename": record.record_filename,
-            #     "record_hash": record.record_hash
-            # }
             record_list.append(record.__dict__)
 
         # Representation of block without it's hash

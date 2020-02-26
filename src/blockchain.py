@@ -1,8 +1,9 @@
 import time
 import os
 import json
-from src.block import Block
-from src.block_utils import get_block_object_from_dict
+from block import Block
+import block_utils
+import chain_utils
 
 
 class Blockchain:
@@ -15,21 +16,9 @@ class Blockchain:
         Blockchain class constructor
         """
 
-        app_root_dir = os.path.abspath(os.curdir + "/../..")
-        print("[DEBUG] Attempting to load blocks...")
-
-        # Checks if the 'blocks' directory exists under the app's root directory
-        if os.path.exists(f"{app_root_dir}/blocks"):
-            self.blocks_directory = os.path.abspath(app_root_dir + "/blocks")
-            # JSON file containing chain does not exists if 'load_chain()' returns false, so initialise one
-            if not self.load_chain():
-                self.init_chain()
-        else:
-            # If blocks directory does not exist, chain does not exist so initialise one.
-            print("[DEBUG] Generating new blockchain, will need to be synced.")
-            os.chdir("../..")
-            os.mkdir("blocks")
-            self.blocks_directory = app_root_dir + "/blocks"
+        self.chain = chain_utils.load_chain_from_storage()
+        print(len(self.chain))
+        if len(self.chain) == 0:
             self.init_chain()
 
     def init_chain(self):
@@ -37,25 +26,13 @@ class Blockchain:
         Initialises the blockchain with genesis block and writes it to a JSON file
         """
         self.generate_genesis_block()
-        blocks_json_file = open(self.blocks_directory + "/blocks.json", "w")
+        app_root_dir = chain_utils.get_app_root_directory()
+        os.chdir("..")
+        os.mkdir("data")
+        blocks_json_file = open(str(app_root_dir) + "/data/blocks.json", "w")
         json.dump(self.chain, blocks_json_file)
         blocks_json_file.close()
-        self.load_chain()
-
-    def load_chain(self):
-        """
-        Loads a JSON file that stores that state of the blockchain
-
-        :return: True if chain successfully loaded, False otherwise.
-        """
-        try:
-            self.chain = json.load(open(self.blocks_directory + "/blocks.json", "r"))
-        except IOError:
-            return False
-        else:
-            print("[OK] Blocks were successfully loaded.")
-            print(self.chain)
-            return True
+        self.chain = chain_utils.load_chain_from_storage()
 
     def generate_genesis_block(self):
         """
@@ -82,11 +59,11 @@ class Blockchain:
             else:
                 block.nonce += 1
 
-    def most_recent_block(self):
+    def last_block_on_chain(self):
         """
         :return: Block at the end of the chain
         """
-        return get_block_object_from_dict(self.chain[-1])
+        return block_utils.get_block_object_from_dict(self.chain[-1])
 
     def add_block(self, block):
         """
@@ -96,7 +73,7 @@ class Blockchain:
         :param block:   Solved block to be added to the chain
         :return:        True if block added, False otherwise
         """
-        previous_hash = self.most_recent_block().hash
+        previous_hash = self.last_block_on_chain().hash
         block_hash = block.get_block_hash()
 
         # Verify correct previous hash exists in block
@@ -115,7 +92,7 @@ class Blockchain:
         Method allowing a node to verify transactions
         :return: The index of the new block
         """
-        last_block = self.most_recent_block()
+        last_block = self.last_block_on_chain()
 
         if records is None:
             return False

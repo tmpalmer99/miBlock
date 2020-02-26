@@ -15,6 +15,9 @@ class MaintenanceRecord:
         self.record_hash = self.get_file_hash()
 
     def get_file_hash(self):
+        """
+        Generates a fingerprint of a maintenance record document
+        """
         file_hash = hashlib.sha256()
         reading_file = True
 

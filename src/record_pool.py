@@ -1,3 +1,6 @@
+import chain_utils
+
+
 class RecordPool:
 
     def __init__(self):
@@ -40,6 +43,8 @@ class RecordPool:
         :param record: Record object to be removed from pool
         :return:       True if record removed, False otherwise
         """
-        # TODO - Create function to check record exists on the blockchain
         if record in self.unverified_records:
-            self.unverified_records.remove(record)
+            if chain_utils.get_block_by_record(record.record_filename):
+                self.unverified_records.remove(record)
+                return True
+        return False
