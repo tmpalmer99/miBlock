@@ -7,12 +7,13 @@ class MaintenanceRecord:
     date_of_record = None
     record_filename = None
     record_hash = None
+    path_to_file = None
 
-    def __init__(self, aircraft_registration_number, date_of_record, filename):
+    def __init__(self, aircraft_registration_number, date_of_record, filename, file_path):
         self.aircraft_reg = aircraft_registration_number
         self.date_of_record = date_of_record
         self.record_filename = filename
-        self.record_hash = self.get_file_hash()
+        self.path_to_file = file_path
 
     def get_file_hash(self):
         """
@@ -22,7 +23,7 @@ class MaintenanceRecord:
         reading_file = True
 
         try:
-            file = open(f"{os.getcwd()}/{self.record_filename}", "rb")
+            file = open(self.path_to_file, "rb")
         except (OSError, IOError) as e:
             print(str(e))
             return

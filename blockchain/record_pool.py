@@ -1,3 +1,6 @@
+from blockchain import chain_utils
+
+
 class RecordPool:
 
     def __init__(self):
