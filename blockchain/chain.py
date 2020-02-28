@@ -1,9 +1,9 @@
 import os
 import time
 import json
+
 from blockchain.block import Block
-import blockchain.block_utils as block_utils
-import blockchain.chain_utils as chain_utils
+from blockchain import chain_utils, block_utils
 
 
 class Blockchain:
@@ -26,7 +26,6 @@ class Blockchain:
         """
         self.generate_genesis_block()
         app_root_dir = chain_utils.get_app_root_directory()
-        os.chdir("..")
         os.mkdir("data")
         blocks_json_file = open(str(app_root_dir) + "/data/blocks.json", "w")
         json.dump(self.chain, blocks_json_file)
@@ -78,7 +77,7 @@ class Blockchain:
         # Verify correct previous hash exists in block
         if block.previous_hash == previous_hash:
             # Verify the block hash and the proof of work
-            if block_hash.startwith('0' * self.mining_difficulty) and block_hash == block.hash:
+            if chain_utils.is_block_hash_valid(block):
                 self.chain.append(block.__dict__)
                 return True
             else:
@@ -93,8 +92,8 @@ class Blockchain:
         """
         last_block = self.last_block_on_chain()
 
-        if records is None:
-            return False
+        if len(records) is None:
+            return None
 
         # Initialise new block
         new_block = Block(index=last_block.index + 1,
@@ -107,4 +106,4 @@ class Blockchain:
 
         # Attempt to add the block to the chain
         self.add_block(new_block)
-        return new_block.index
+        return new_block
