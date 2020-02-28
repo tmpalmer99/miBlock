@@ -32,7 +32,7 @@ class Block:
         record_list = []
         # Get a JSON representation for each record in the block
         for record in self.records:
-            record_list.append(record.__dict__)
+            record_list.append(record)
 
         # Representation of block without it's hash
         block = {

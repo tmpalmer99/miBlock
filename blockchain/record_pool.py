@@ -37,14 +37,19 @@ class RecordPool:
         """
         return len(self.unverified_records)
 
-    def remove_record(self, record):
+    def remove_records(self, records):
         """
         Removes a record from record pool once it has been verified
-        :param record: Record object to be removed from pool
+        :param records: List of records to be removed from pool
         :return:       True if record removed, False otherwise
         """
-        if record in self.unverified_records:
-            if chain_utils.get_block_by_record(record.record_filename):
-                self.unverified_records.remove(record)
-                return True
-        return False
+        records_to_remove = len(records)
+        records_removed = 0
+
+        for record in records:
+            if record in self.unverified_records:
+                if chain_utils.get_block_by_record(record["record_filename"]):
+                    self.unverified_records.remove(record)
+                    records_removed += 1
+
+        return records_to_remove == records_removed

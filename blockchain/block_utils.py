@@ -15,12 +15,9 @@ def get_block_object_from_dict(block_dict):
     nonce = block_dict["nonce"]
     # Todo Records may need to be converted from dict representation
     records = block_dict["records"]
-    true_hash = block_dict["hash"]
+    block_hash = block_dict["hash"]
 
     block = Block(index, previous_hash, timestamp, records, nonce)
-    block_hash = block.get_block_hash()
     block.hash = block_hash
 
-    # Ensure block data is correct
-    if block_hash == true_hash:
-        return block
+    return block

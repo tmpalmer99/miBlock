@@ -3,19 +3,19 @@ import time
 import json
 
 from blockchain.block import Block
+from blockchain.record_pool import RecordPool
 from blockchain import chain_utils, block_utils
 
 
 class Blockchain:
     chain = []
-    blocks_directory = None
     mining_difficulty = 4
 
     def __init__(self):
         """
         Blockchain class constructor
         """
-
+        self.record_pool = RecordPool()
         self.chain = chain_utils.load_chain_from_storage()
         if len(self.chain) == 0:
             self.init_chain()
@@ -26,8 +26,9 @@ class Blockchain:
         """
         self.generate_genesis_block()
         app_root_dir = chain_utils.get_app_root_directory()
-        os.mkdir("data")
-        blocks_json_file = open(str(app_root_dir) + "/data/blocks.json", "w")
+        if not os.path.exists(f"{app_root_dir}/data"):
+            chain_utils.generate_data_folder()
+        blocks_json_file = open(f"{app_root_dir}/data/blocks.json", "w")
         json.dump(self.chain, blocks_json_file)
         blocks_json_file.close()
         self.chain = chain_utils.load_chain_from_storage()
@@ -52,7 +53,7 @@ class Blockchain:
         # Increment nonce until valid hash is found
         while not solved:
             block_hash = block.get_block_hash()
-            if block_hash[0:self.mining_difficulty] is '0' * self.mining_difficulty:
+            if block_hash[0:self.mining_difficulty] == '0' * self.mining_difficulty:
                 return block_hash
             else:
                 block.nonce += 1
@@ -71,13 +72,14 @@ class Blockchain:
         :param block:   Solved block to be added to the chain
         :return:        True if block added, False otherwise
         """
-        previous_hash = self.last_block_on_chain().hash
-        block_hash = block.get_block_hash()
+        last_block = self.last_block_on_chain()
+        previous_hash = last_block.hash
 
         # Verify correct previous hash exists in block
         if block.previous_hash == previous_hash:
             # Verify the block hash and the proof of work
-            if chain_utils.is_block_hash_valid(block):
+            if self.is_block_hash_valid(block):
+                chain_utils.write_block_to_chain(block)
                 self.chain.append(block.__dict__)
                 return True
             else:
@@ -85,11 +87,12 @@ class Blockchain:
         else:
             return False
 
-    def mine(self, records):
+    def mine(self):
         """
         Method allowing a node to verify transactions
         :return: The index of the new block
         """
+        records = self.record_pool.get_unverified_records()
         last_block = self.last_block_on_chain()
 
         if len(records) is None:
@@ -106,4 +109,29 @@ class Blockchain:
 
         # Attempt to add the block to the chain
         self.add_block(new_block)
+        self.record_pool.remove_records(records)
         return new_block
+
+    def is_block_hash_valid(self, block):
+        block_hash = block.get_block_hash()
+        if block_hash.startswith('0' * self.mining_difficulty) and block_hash == block.hash:
+            return True
+        return False
+
+    # Checks all blocks in the chain are valid
+    def is_chain_valid(self):
+        previous_hash = ""
+        for block in self.chain:
+            temp_block = block_utils.get_block_object_from_dict(block)
+            if temp_block.index != 0:
+                if temp_block.previous_hash != previous_hash:
+                    return False
+                if not self.is_block_hash_valid(temp_block):
+                    return False
+            previous_hash = temp_block.get_block_hash()
+        return True
+
+    # Add new maintenance record to the record pool
+    def add_record_to_pool(self, record):
+        self.record_pool.add_record(record)
+

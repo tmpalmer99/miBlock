@@ -1,12 +1,11 @@
 import hashlib
-import os
 
 
 class MaintenanceRecord:
     aircraft_reg = None
     date_of_record = None
     record_filename = None
-    record_hash = None
+    file_hash = None
     path_to_file = None
 
     def __init__(self, aircraft_registration_number, date_of_record, filename, file_path):
@@ -19,20 +18,13 @@ class MaintenanceRecord:
         """
         Generates a fingerprint of a maintenance record document
         """
-        file_hash = hashlib.sha256()
-        reading_file = True
+        sha256 = hashlib.sha256()
 
-        try:
-            file = open(self.path_to_file, "rb")
-        except (OSError, IOError) as e:
-            print(str(e))
-            return
+        with open(self.path_to_file, 'rb') as f:
+            while True:
+                data = f.read(65536)
+                if not data:
+                    break
+                sha256.update(data)
 
-        with file:
-            while reading_file:
-                data = file.read(4096)
-                if data == "":
-                    reading_file = False
-                else:
-                    file_hash.update(data)
-        return file_hash
+        return sha256.hexdigest()
