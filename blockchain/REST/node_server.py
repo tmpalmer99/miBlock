@@ -4,6 +4,7 @@ import requests
 
 from flask import Flask, request
 from blockchain.chain import Blockchain
+from blockchain.block import Block
 from blockchain import chain_utils, block_utils
 from blockchain.maintenance_record import MaintenanceRecord
 
@@ -14,6 +15,7 @@ blockchain = Blockchain()
 
 # Maintain peer addresses
 peers = []
+
 
 # ---------------------------------------------------[API Endpoints]----------------------------------------------------
 # -------------------------------------------------------[Chain]--------------------------------------------------------
@@ -59,7 +61,7 @@ def sync_record():
         return 'Invalid data provided to create maintenance record', 400
 
     blockchain.record_pool.add_record(record)
-    return' "Record added to pool"', 200
+    return ' "Record added to pool"', 200
 
 
 # ---------------------------------------------------[Register Nodes]---------------------------------------------------
@@ -118,11 +120,36 @@ def discover_peers():
 
 # -----------------------------------------------------[Mine Blocks]----------------------------------------------------
 
-
 @app.route('/mine', methods=['GET'])
 def mine_block():
+    # Mine a block
     mined_block = blockchain.mine()
-    # TODO - Error handling
+
+    # Check block was successfully mined
+    if mined_block is None:
+        return "No records to verify", 400
+
+    # Store length of chain before reaching consensus with peers
+    length_of_chain = len(blockchain.chain)
+
+    # Reach consensus with peers
+    chain_consensus()
+
+    # If node's chain is most up to date, broadcast it to peer's to synchronise chain
+    if length_of_chain == len(blockchain.chain):
+        broadcast_block(mined_block)
+
+
+@app.route('/add_block', methods=['POST'])
+def add_block():
+    block = generate_block(request.get_json())
+    if block is None:
+        return "There was an error when added block", 400
+
+    if blockchain.add_block(block):
+        return "Block was added to node's chain", 201
+    else:
+        return "There was an error when added block", 400
 
 
 # --------------------------------------------------[Broadcast Functions]-----------------------------------------------
@@ -130,14 +157,15 @@ def mine_block():
 
 def broadcast_record(record):
     # Send unverified record to all peers
+    data = {
+        'aircraft_reg_number': record.aircraft_reg_number,
+        'date_of_record': record.date_of_record,
+        'filename': record.filename,
+        'file_path': record.file_path
+    }
+    headers = {'Content-Type': "application/json"}
+
     for peer in peers:
-        headers = {'Content-Type': "application/json"}
-        data = {
-            'aircraft_reg_number': record.aircraft_reg_number,
-            'date_of_record': record.date_of_record,
-            'filename': record.filename,
-            'file_path': record.file_path
-        }
         requests.post(f"http://{peer}/sync/record", headers=headers, data=data)
 
 
@@ -165,18 +193,51 @@ def chain_consensus():
             blocks_json_file.close()
 
 
+def broadcast_block(block):
+    data = {
+        'index': block.index,
+        'previous_hash': block.previous_hash,
+        'timestamp': block.timestamp,
+        'nonce': block.nonce,
+        'records': block.records,
+        'hash': block.hash
+    }
+    headers = {'Content-Type': "application/json"}
+
+    for peer in peers:
+        requests.post(f"http://{peer}/add_block", headers=headers, data=data)
+
+
 # ---------------------------------------------------[Utility Functions]------------------------------------------------
 
 
-def generate_record(request_json):
+def generate_record(record_json):
     # Parameters needed for a valid record
     record_parameters = ['aircraft_reg_number', 'date_of_record', 'filename', 'file_path']
 
     # Bad request if request does not contain all correct
-    if not all(param in request_json for param in record_parameters):
+    if not all(param in record_json for param in record_parameters):
         return None
 
-    return MaintenanceRecord(request_json['aircraft_reg_number'],
-                             request_json['date_of_record'],
-                             request_json['filename'],
-                             request_json['file_path'])
+    return MaintenanceRecord(record_json['aircraft_reg_number'],
+                             record_json['date_of_record'],
+                             record_json['filename'],
+                             record_json['file_path'])
+
+
+def generate_block(block_json):
+    # Parameters needed for a valid block
+    block_parameters = ['index', 'previous_hash', 'timestamp', 'nonce', 'records', 'hash']
+
+    # Bad request if request does not contain all correct
+    if not all(param in block_json for param in block_parameters):
+        return None
+
+    block = Block(block_json['index'],
+                  block_json['previous_hash'],
+                  block_json['timestamp'],
+                  block_json['nonce'],
+                  block_json['records'])
+    block.hash = block_json['hash']
+
+    return block
