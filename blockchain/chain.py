@@ -130,8 +130,3 @@ class Blockchain:
                     return False
             previous_hash = temp_block.get_block_hash()
         return True
-
-    # Add new maintenance record to the record pool
-    def add_record_to_pool(self, record):
-        self.record_pool.add_record(record)
-
