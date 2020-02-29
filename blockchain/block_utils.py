@@ -1,3 +1,5 @@
+import os
+
 from blockchain.block import Block
 
 
@@ -19,5 +21,14 @@ def get_block_object_from_dict(block_dict):
 
     block = Block(index, previous_hash, timestamp, records, nonce)
     block.hash = block_hash
-
     return block
+
+
+def is_record_valid(record):
+    if not os.path.exists(record.file_path):
+        return False
+    if not str(record.file_path).split("/")[-1] != record.filename:
+        return False
+    return True
+
+
