@@ -2,7 +2,7 @@ import hashlib
 
 
 class MaintenanceRecord:
-    aircraft_reg = None
+    aircraft_reg_number = None
     date_of_record = None
     filename = None
     file_hash = None
@@ -11,7 +11,7 @@ class MaintenanceRecord:
     def __init__(self, aircraft_reg_number, date_of_record, filename, file_path):
         self.aircraft_reg_number = aircraft_reg_number
         self.date_of_record = date_of_record
-        self.record_filename = filename
+        self.filename = filename
         self.file_path = file_path
 
     def get_file_hash(self):

@@ -43,13 +43,7 @@ class RecordPool:
         :param records: List of records to be removed from pool
         :return:       True if record removed, False otherwise
         """
-        records_to_remove = len(records)
-        records_removed = 0
-
         for record in records:
             if record in self.unverified_records:
-                if chain_utils.get_block_by_record(record["record_filename"]):
+                if chain_utils.get_block_by_record(record.filename):
                     self.unverified_records.remove(record)
-                    records_removed += 1
-
-        return records_to_remove == records_removed

@@ -12,8 +12,8 @@ def get_block_by_index(index):
     if len(chain) != 0:
         chain.reverse()
         for block in chain:
-            if block["index"] == index:
-                return block.utils.get_block_object_from_dict(block)
+            if block.index == index:
+                return block
     return None
 
 
@@ -23,16 +23,19 @@ def get_block_by_record(record_filename):
     if len(chain) != 0:
         chain.reverse()
         for block in chain:
-            for record in block["records"]:
-                if record["record_filename"] == record_filename:
-                    return block_utils.get_block_object_from_dict(block)
+            for record in block.records:
+                if record.filename == record_filename:
+                    return block
     return None
 
 
 def load_chain_from_storage():
     try:
         chain_file = open(path_to_stored_chain(), "r")
-        chain = json.load(chain_file)
+        chain_json = json.load(chain_file)
+        chain = []
+        for block in chain_json:
+            chain.append(block_utils.get_block_object_from_dict(block))
     except IOError:
         print("[INFO] JSON file containing blockchain was not found...")
         return []
@@ -61,10 +64,28 @@ def path_to_stored_chain():
 
 
 def write_block_to_chain(block):
-    print(f"[DEBUG]: Writing block with index {block.index}.")
+    print(f"[DEBUG] - Writing block with index {block.index}.")
     with open(path_to_stored_chain()) as chain_file:
+        block_dict = block_utils.get_block_dict_from_object(block)
         chain = json.load(chain_file)
-    chain.append(block.__dict__)
-    chain_file.close()
+        chain.append(block_dict)
+        chain_file.close()
     with open(path_to_stored_chain(), "r+") as chain_file:
-        json.dump(chain, chain_file)
+        json.dump(chain, chain_file, sort_keys=True, indent=2)
+    print(f"[DEBUG] - Block Successfully Written...")
+
+
+def get_chain_json(chain):
+    chain_json = []
+    for block in chain:
+        block_json = block_utils.get_block_dict_from_object(block)
+        chain_json.append(block_json)
+    return chain_json
+
+
+def get_chain_from_json(chain_json):
+    chain = []
+    for block in chain_json:
+        block_obj = block_utils.get_block_object_from_dict(block)
+        chain.append(block_obj)
+    return chain

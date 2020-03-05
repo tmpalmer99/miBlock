@@ -29,7 +29,8 @@ class Blockchain:
         if not os.path.exists(f"{app_root_dir}/data"):
             chain_utils.generate_data_folder()
         blocks_json_file = open(f"{app_root_dir}/data/blocks.json", "w")
-        json.dump(self.chain, blocks_json_file)
+        chain_json = chain_utils.get_chain_json(self.chain)
+        json.dump(chain_json, blocks_json_file, sort_keys=True, indent=2)
         blocks_json_file.close()
         self.chain = chain_utils.load_chain_from_storage()
 
@@ -40,7 +41,7 @@ class Blockchain:
         print("[DEBUG] Generating new genesis block.")
         genesis_block = Block(0, "0", time.time(), [])
         genesis_block.hash = genesis_block.get_block_hash()
-        self.chain.append(genesis_block.__dict__)
+        self.chain.append(genesis_block)
 
     def proof_of_work(self, block):
         """
@@ -62,7 +63,7 @@ class Blockchain:
         """
         :return: Block at the end of the chain
         """
-        return block_utils.get_block_object_from_dict(self.chain[-1])
+        return self.chain[-1]
 
     def add_block(self, block):
         """
@@ -80,8 +81,9 @@ class Blockchain:
             # Verify the block hash and the proof of work
             if self.is_block_hash_valid(block):
                 chain_utils.write_block_to_chain(block)
-                self.chain.append(block.__dict__)
-                return True
+                self.chain.append(block)
+                if self.is_chain_valid():
+                    return True
             else:
                 return False
         else:
@@ -95,7 +97,7 @@ class Blockchain:
         records = self.record_pool.get_unverified_records()
         last_block = self.last_block_on_chain()
 
-        if len(records) is None:
+        if len(records) == 0:
             return None
 
         # Initialise new block
@@ -110,6 +112,7 @@ class Blockchain:
         # Attempt to add the block to the chain
         self.add_block(new_block)
         self.record_pool.remove_records(records)
+
         return new_block
 
     def is_block_hash_valid(self, block):
