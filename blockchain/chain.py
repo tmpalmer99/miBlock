@@ -109,10 +109,11 @@ class Blockchain:
         new_block.hash = self.proof_of_work(new_block)
 
         # Attempt to add the block to the chain
-        self.add_block(new_block)
-        self.record_pool.remove_records(records)
-
-        return new_block
+        if self.add_block(new_block):
+            self.record_pool.remove_records(records)
+            return new_block
+        else:
+            return None
 
     def is_block_hash_valid(self, block):
         block_hash = block.get_block_hash()

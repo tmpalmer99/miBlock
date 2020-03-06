@@ -19,6 +19,9 @@ blockchain = Blockchain()
 # Maintain peer addresses
 peers = []
 
+# Discovery node address
+discov_address = '172.17.0.1:5000'
+
 
 # ---------------------------------------------------[API Endpoints]----------------------------------------------------
 # -------------------------------------------------------[Chain]--------------------------------------------------------
@@ -107,7 +110,7 @@ def accept_node():
 
     # Return the node a list of peers on the network and an updated version of the chain
     response_peers = peers.copy()
-    response_peers.append('172.17.0.1:5000')
+    response_peers.append(discov_address)
     response = {
         'peers': response_peers,
         'chain': chain_utils.get_chain_json(blockchain.chain)
@@ -134,7 +137,7 @@ def register_node():
     headers = {'Content-Type': 'application/json'}
 
     # Send request to directory node for chain and peer list
-    response = requests.post('http://172.17.0.1:5000/node', data=json.dumps(data), headers=headers)
+    response = requests.post(f'http://{discov_address}/node', data=json.dumps(data), headers=headers)
 
     # If request successful, update chain and list of peers
     if response.status_code == 200:

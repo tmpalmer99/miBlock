@@ -13,29 +13,28 @@ def get_block_object_from_dict(block_dict):
     :return:            A Block object
     """
     index = block_dict["index"]
-    previous_hash = block_dict["previous_hash"]
-    timestamp = block_dict["timestamp"]
     nonce = block_dict["nonce"]
     block_hash = block_dict["hash"]
+    timestamp = block_dict["timestamp"]
+    previous_hash = block_dict["previous_hash"]
 
     records = []
-    for record in block_dict["records"]:
-        records.append(get_record_object_from_dict(record))
+    for record_dict in block_dict["records"]:
+        record = get_record_object_from_dict(record_dict)
+        records.append(record)
 
     block = Block(index, previous_hash, timestamp, records, nonce)
     if block.get_block_hash() == block_hash:
         block.hash = block_hash
-        # TODO: This returns None, for some reason block hashes are not the same. debug please
         return block
-    else:
-        return None
+    return None
 
 
-def get_record_object_from_dict(record):
-    return MaintenanceRecord(record['aircraft_reg_number'],
-                             record['date_of_record'],
-                             record['filename'],
-                             record['file_path'])
+def get_record_object_from_dict(record_dict):
+    return MaintenanceRecord(record_dict['aircraft_reg_number'],
+                             record_dict['date_of_record'],
+                             record_dict['filename'],
+                             record_dict['file_path'])
 
 
 def get_block_dict_from_object(block):
@@ -56,10 +55,9 @@ def get_block_dict_from_object(block):
 
 
 def is_record_valid(record):
-    if not os.path.exists(record.file_path):
-        return False
+    # TODO: Node might not have file, it will exist on a different machine.
+    # if not os.path.exists(record.file_path):
+    #     return False
     if not str(record.file_path).split("/")[-1] == record.filename:
         return False
     return True
-
-

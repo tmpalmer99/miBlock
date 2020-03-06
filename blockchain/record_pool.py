@@ -23,13 +23,11 @@ class RecordPool:
         if self.get_num_unverified_records() >= 3:
             for i in range(3):
                 records.append(self.unverified_records[i])
-            return records
         elif self.get_num_unverified_records() > 0:
             for i in range(self.get_num_unverified_records()):
                 records.append(self.unverified_records[i])
-            return records
-        else:
-            return records
+                
+        return records
 
     def get_num_unverified_records(self):
         """
