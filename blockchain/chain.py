@@ -4,7 +4,7 @@ import json
 
 from blockchain.block import Block
 from blockchain.record_pool import RecordPool
-from blockchain import chain_utils, block_utils
+from blockchain import chain_utils
 
 
 class Blockchain:
@@ -116,18 +116,29 @@ class Blockchain:
             return None
 
     def is_block_hash_valid(self, block):
+        """
+        Checks the validity of a block's hash
+        :param block:   The block in question
+        :return:        True if block hash is valid, False otherwise
+        """
         block_hash = block.get_block_hash()
         if block_hash.startswith('0' * self.mining_difficulty) and block_hash == block.hash:
             return True
         return False
 
-    # Checks all blocks in the chain are valid
     def is_chain_valid(self):
+        """
+        Checks the validity of a node's chain
+        :return: True if node's chain is valid, False otherwise
+        """
         previous_hash = ""
+        # Check hashes are valid for each block in chain
         for block in self.chain:
             if block.index != 0:
+                # Check previous block's data is unchanged
                 if block.previous_hash != previous_hash:
                     return False
+                # Check block's data is unchanged
                 if not self.is_block_hash_valid(block):
                     return False
             previous_hash = block.get_block_hash()

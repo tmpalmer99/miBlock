@@ -41,7 +41,8 @@ class RecordPool:
         :param records: List of records to be removed from pool
         :return:       True if record removed, False otherwise
         """
-        for record in records:
-            if record in self.unverified_records:
-                if chain_utils.is_record_verified(record.filename):
-                    self.unverified_records.remove(record)
+        for verified_record in records:
+            for unverified_record in self.unverified_records:
+                if unverified_record.aircraft_reg_number == verified_record.aircraft_reg_number and \
+                    unverified_record.filename == verified_record.filename:
+                    self.unverified_records.remove(unverified_record)

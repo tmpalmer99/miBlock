@@ -1,5 +1,3 @@
-import os
-
 from blockchain.block import Block
 from blockchain.maintenance_record import MaintenanceRecord
 
@@ -31,6 +29,11 @@ def get_block_object_from_dict(block_dict):
 
 
 def get_record_object_from_dict(record_dict):
+    """
+    Converts a record in dictionary format to object form
+    :param record_dict: Record in dictionary format
+    :return:            Record in MaintenanceRecord type
+    """
     return MaintenanceRecord(record_dict['aircraft_reg_number'],
                              record_dict['date_of_record'],
                              record_dict['filename'],
@@ -38,6 +41,11 @@ def get_record_object_from_dict(record_dict):
 
 
 def get_block_dict_from_object(block):
+    """
+    Changes the format of a block allowing it to be JSON serialised
+    :param block:   Regular block from a node's chain
+    :return:        Block in format suitable for JSON serialisation
+    """
     formatted_records = []
     for record in block.records:
         formatted_records.append(record.__dict__)
@@ -55,6 +63,11 @@ def get_block_dict_from_object(block):
 
 
 def is_record_valid(record):
+    """
+    Checks the validity of a record
+    :param record:  Record in question
+    :return:        True if record is valid, False otherwise
+    """
     # TODO: Node might not have file, it will exist on a different machine.
     # if not os.path.exists(record.file_path):
     #     return False
