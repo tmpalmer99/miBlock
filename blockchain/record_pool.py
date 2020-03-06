@@ -1,4 +1,4 @@
-import chain_utils
+from blockchain import chain_utils
 
 
 class RecordPool:
@@ -23,13 +23,11 @@ class RecordPool:
         if self.get_num_unverified_records() >= 3:
             for i in range(3):
                 records.append(self.unverified_records[i])
-            return records
         elif self.get_num_unverified_records() > 0:
             for i in range(self.get_num_unverified_records()):
                 records.append(self.unverified_records[i])
-            return records
-        else:
-            return None
+                
+        return records
 
     def get_num_unverified_records(self):
         """
@@ -37,14 +35,14 @@ class RecordPool:
         """
         return len(self.unverified_records)
 
-    def remove_record(self, record):
+    def remove_records(self, records):
         """
         Removes a record from record pool once it has been verified
-        :param record: Record object to be removed from pool
+        :param records: List of records to be removed from pool
         :return:       True if record removed, False otherwise
         """
-        if record in self.unverified_records:
-            if chain_utils.get_block_by_record(record.record_filename):
-                self.unverified_records.remove(record)
-                return True
-        return False
+        for verified_record in records:
+            for unverified_record in self.unverified_records:
+                if unverified_record.aircraft_reg_number == verified_record.aircraft_reg_number and \
+                    unverified_record.filename == verified_record.filename:
+                    self.unverified_records.remove(unverified_record)

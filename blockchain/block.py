@@ -43,7 +43,7 @@ class Block:
             "records": record_list
         }
 
-        json_block = json.dumps(block)
+        json_block = json.dumps(block, sort_keys=True)
         return hashlib.sha256(json_block.encode()).hexdigest()
 
 
