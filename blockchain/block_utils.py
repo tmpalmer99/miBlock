@@ -25,9 +25,17 @@ def get_block_object_from_dict(block_dict):
     block = Block(index, previous_hash, timestamp, records, nonce)
     if block.get_block_hash() == block_hash:
         block.hash = block_hash
+        # TODO: This returns None, for some reason block hashes are not the same. debug please
         return block
     else:
         return None
+
+
+def get_record_object_from_dict(record):
+    return MaintenanceRecord(record['aircraft_reg_number'],
+                             record['date_of_record'],
+                             record['filename'],
+                             record['file_path'])
 
 
 def get_block_dict_from_object(block):
@@ -47,20 +55,10 @@ def get_block_dict_from_object(block):
     return block_dict
 
 
-def get_record_object_from_dict(record):
-    return MaintenanceRecord(record['aircraft_reg_number'],
-                             record['date_of_record'],
-                             record['filename'],
-                             record['file_path'])
-
-
 def is_record_valid(record):
-    print(f"[DEBUG] - Checking record validity: {record}")
     if not os.path.exists(record.file_path):
-        print(1)
         return False
-    if not str(record.file_path).split("/")[-1] != record.filename:
-        print(2)
+    if not str(record.file_path).split("/")[-1] == record.filename:
         return False
     return True
 

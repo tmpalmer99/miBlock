@@ -18,15 +18,13 @@ def get_block_by_index(index):
 
 
 # A utility function to traverse the chain and return the block that contains the given filename
-def get_block_by_record(record_filename):
+def is_record_verified(record_filename):
     chain = load_chain_from_storage()
-    if len(chain) != 0:
-        chain.reverse()
-        for block in chain:
-            for record in block.records:
-                if record.filename == record_filename:
-                    return block
-    return None
+    for block in chain:
+        for record in block.records:
+            if record.filename == record_filename:
+                return True
+    return False
 
 
 def load_chain_from_storage():

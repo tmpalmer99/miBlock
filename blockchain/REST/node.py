@@ -42,11 +42,11 @@ def add_record():
     # Generate record from request data
     record = generate_record(request.form)
 
+    app.logger.info(f"Adding Record with filename '{record.filename}'")
+
     # Generate record returns None with invalid data
     if record is None or not block_utils.is_record_valid(record):
         return 'Invalid data provided to create maintenance record', 400
-
-    print("[DEBUG] - record: ", record)
 
     # Add record to record pool
     blockchain.record_pool.add_record(record)
@@ -78,7 +78,13 @@ def get_unverified_records():
     response = []
     for record in blockchain.record_pool.unverified_records:
         response.append(record.__dict__)
-    return json.dumps(response, sort_keys=True, indent=2), 200
+
+    data = {
+        'length': len(response),
+        'records': response
+    }
+    
+    return json.dumps(data, sort_keys=True, indent=2), 200
 
 
 # ---------------------------------------------------[Register Nodes]---------------------------------------------------

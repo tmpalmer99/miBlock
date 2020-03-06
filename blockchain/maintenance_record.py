@@ -13,6 +13,7 @@ class MaintenanceRecord:
         self.date_of_record = date_of_record
         self.filename = filename
         self.file_path = file_path
+        self.file_hash = self.get_file_hash()
 
     def get_file_hash(self):
         """

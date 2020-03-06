@@ -29,7 +29,7 @@ class RecordPool:
                 records.append(self.unverified_records[i])
             return records
         else:
-            return None
+            return records
 
     def get_num_unverified_records(self):
         """
@@ -45,5 +45,5 @@ class RecordPool:
         """
         for record in records:
             if record in self.unverified_records:
-                if chain_utils.get_block_by_record(record.filename):
+                if chain_utils.is_record_verified(record.filename):
                     self.unverified_records.remove(record)

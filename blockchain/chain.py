@@ -82,8 +82,7 @@ class Blockchain:
             if self.is_block_hash_valid(block):
                 chain_utils.write_block_to_chain(block)
                 self.chain.append(block)
-                if self.is_chain_valid():
-                    return True
+                return self.is_chain_valid()
             else:
                 return False
         else:
@@ -125,11 +124,10 @@ class Blockchain:
     def is_chain_valid(self):
         previous_hash = ""
         for block in self.chain:
-            temp_block = block_utils.get_block_object_from_dict(block)
-            if temp_block.index != 0:
-                if temp_block.previous_hash != previous_hash:
+            if block.index != 0:
+                if block.previous_hash != previous_hash:
                     return False
-                if not self.is_block_hash_valid(temp_block):
+                if not self.is_block_hash_valid(block):
                     return False
-            previous_hash = temp_block.get_block_hash()
+            previous_hash = block.get_block_hash()
         return True
