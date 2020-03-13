@@ -3,6 +3,8 @@ import json
 import requests
 
 from flask import Flask, request
+from blockchain.chord.chord import Chord
+from blockchain.chord import chord_utils
 from blockchain.chain import Blockchain
 from blockchain import chain_utils, block_utils
 
@@ -13,6 +15,9 @@ if __name__ == '__main__':
 
 # Node's copy of blockchain
 blockchain = Blockchain()
+
+# Join chord
+chord = Chord('172.17.0.1:5000')
 
 # Maintain peer addresses
 peers = []
@@ -107,6 +112,8 @@ def accept_peer():
     # Get most update to date chain on the network
     peer_chain_consensus()
 
+    # TODO: Add peer to chord
+
     # Return the node a list of peers on the network and an updated version of the chain
     response_peers = peers.copy()
     response_peers.append(discovery_node_address)
@@ -124,6 +131,7 @@ def accept_peer():
 @app.route('/node/register', methods=['POST'])
 def register_node():
     global node_address
+    global chord
 
     # Discovery nodes needs address to update list of addresses.
     if 'node_address' not in request.args:
@@ -139,6 +147,7 @@ def register_node():
 
     # If request successful, update chain and list of peers
     if response.status_code == 200:
+        chord = Chord(node_address)
         blockchain.chain = chain_utils.get_chain_from_json(response.json()['chain'])
         for peer in response.json()['peers']:
             peers.append(peer)
@@ -206,6 +215,34 @@ def add_block():
     else:
         return "There was an error when adding block", 400
 
+
+# ----------------------------------------------------[Chord Endpoints]-------------------------------------------------
+
+@app.route('/chord/find_successor', methods=['GET'])
+def find_successor():
+    key = request.args['key']
+    successor = {'successor': chord.find_successor(key)}
+    return successor, 200
+
+
+@app.route('/chord/predecessor', methods=['GET'])
+def find_successor():
+    predecessor = {'successor': chord.predecessor}
+    return predecessor, 200
+
+
+@app.route('/chord/notify', methods=['POST'])
+def notify():
+    potential_predecessor = request.args['predecessor']
+    if chord.predecessor is None or \
+        chord_utils.get_hash(chord.predecessor) < chord_utils.get_hash(potential_predecessor) < chord.node_id:
+        chord.predecessor = potential_predecessor
+    return 'OK', 200
+
+
+@app.route('/chord/ping', methods=['GET'])
+def ping():
+    return 'OK', 200
 
 # --------------------------------------------------[Broadcast Functions]-----------------------------------------------
 
