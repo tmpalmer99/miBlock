@@ -6,6 +6,9 @@ from blockchain.block import Block
 from blockchain.record_pool import RecordPool
 from blockchain import chain_utils
 
+# Create logger
+logger = chain_utils.init_logger("Chain")
+
 
 class Blockchain:
     chain = []
@@ -15,6 +18,7 @@ class Blockchain:
         """
         Blockchain class constructor
         """
+        logger.info("Initialising node's chain")
         self.record_pool = RecordPool()
         self.chain = chain_utils.load_chain_from_storage()
         if len(self.chain) == 0:
@@ -24,10 +28,14 @@ class Blockchain:
         """
         Initialises the blockchain with genesis block and writes it to a JSON file
         """
+        logger.info("Generating genesis block...")
         self.generate_genesis_block()
+
         app_root_dir = chain_utils.get_app_root_directory()
         if not os.path.exists(f"{app_root_dir}/data"):
             chain_utils.generate_data_folder()
+
+        logger.info("Generating blocks.json...")
         blocks_json_file = open(f"{app_root_dir}/data/blocks.json", "w")
         chain_json = chain_utils.get_chain_json(self.chain)
         json.dump(chain_json, blocks_json_file, sort_keys=True, indent=2)
@@ -38,7 +46,6 @@ class Blockchain:
         """
          Generates the genesis block for the blockchain
         """
-        print("[DEBUG] Generating new genesis block.")
         genesis_block = Block(0, "0", time.time(), [])
         genesis_block.hash = genesis_block.get_block_hash()
         self.chain.append(genesis_block)
@@ -48,6 +55,7 @@ class Blockchain:
         Proof of work consensus algorithm, a mathematical problem that requires computational
         power to solve
         """
+        logger.info(f"Starting proof of work for block with index '{block.index}'")
         block.nonce = 0
         solved = False
 
@@ -55,6 +63,7 @@ class Blockchain:
         while not solved:
             block_hash = block.get_block_hash()
             if block_hash[0:self.mining_difficulty] == '0' * self.mining_difficulty:
+                logger.info(f"Block solved with a hash '{block_hash}'")
                 return block_hash
             else:
                 block.nonce += 1
@@ -73,6 +82,7 @@ class Blockchain:
         :param block:   Solved block to be added to the chain
         :return:        True if block added, False otherwise
         """
+        logger.info(f"Adding block with index '{block.index}'")
         last_block = self.last_block_on_chain()
         previous_hash = last_block.hash
 
@@ -82,10 +92,13 @@ class Blockchain:
             if self.is_block_hash_valid(block):
                 chain_utils.write_block_to_chain(block)
                 self.chain.append(block)
+                logger.info(f"Added block")
                 return self.is_chain_valid()
             else:
+                logger.error(f"Block not added - block hash not valid")
                 return False
         else:
+            logger.error(f"Block not added - previous hash not valid")
             return False
 
     def mine(self):
@@ -93,6 +106,7 @@ class Blockchain:
         Method allowing a node to verify transactions
         :return: The index of the new block
         """
+        logger.info("Mining new block")
         records = self.record_pool.get_unverified_records()
         last_block = self.last_block_on_chain()
 

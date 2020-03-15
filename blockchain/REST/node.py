@@ -4,106 +4,72 @@ import requests
 
 from flask import Flask, request
 from blockchain.chord.chord import Chord
-from blockchain.chord import chord_utils
 from blockchain.chain import Blockchain
 from blockchain import chain_utils, block_utils
+from blockchain.chord import chord_utils
 
 app = Flask(__name__)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0')
 
-# Node's copy of blockchain
-blockchain = Blockchain()
+# Create logger
+logger = chain_utils.init_logger("Node ")
 
-# Join chord
-chord = Chord('172.17.0.1:5000')
-
-# Maintain peer addresses
+# List of known peer addresses
 peers = []
 
-# Discovery node address
+# Address of discovery node
 discovery_node_address = '172.17.0.1:5000'
 
 # Address of node
 node_address = ''
 
+# Node's blockchain instance
+blockchain = Blockchain()
 
-# ---------------------------------------------------[API Endpoints]----------------------------------------------------
-# -------------------------------------------------------[Chain]--------------------------------------------------------
-
-
-@app.route('/chain', methods=['GET'])
-def get_chain():
-    response = {
-        'length': len(blockchain.chain),
-        'chain': chain_utils.get_chain_json(blockchain.chain),
-        'peers': peers
-    }
-    return json.dumps(response, sort_keys=True, indent=2), 200
+# Node's chord instance
+chord = None
 
 
-# -------------------------------------------------------[Records]-----------------------------------------------------
+#                                                     /+=---------=+\
+# --------------------------------------------------=+|  Discovery  |+=-------------------------------------------------
+#                                                     \+=---------=+/
+
+@app.route('/discovery/initialise', methods=['GET'])
+def init_discover_node():
+    global chord, node_address
+    logger.info("Node was asked to initialise the chord ring")
+
+    chord = Chord(discovery_node_address)
+    node_address = discovery_node_address
+    return 'Discovery Node Initialised', 200
 
 
-@app.route('/record', methods=['POST'])
-def add_record():
-    # Generate record from request data
-    record = generate_record_from_request(request.form)
-
-    # Generate record returns None with invalid data
-    if record is None or not block_utils.is_record_valid(record):
-        return 'Invalid data provided to create maintenance record', 400
-
-    # Add record to record pool
-    blockchain.record_pool.add_record(record)
-
-    # Broadcast record to peers
-    broadcast_record_to_peers(record)
-
-    return 'Record added to pool', 200
+@app.route('/discovery/peers', methods=['GET'])
+def get_known_peers():
+    logger.info("Node was asked to return its list of peers")
+    return json.dumps({'peers': peers}), 200
 
 
-@app.route('/record', methods=['GET'])
-def get_unverified_records():
-    # Get unverified records in JSON serializable format
-    response = []
-    for record in blockchain.record_pool.unverified_records:
-        response.append(record.__dict__)
+#                                                  /+=---------------=+\
+# -----------------------------------------------=+|  Node Management  |+=----------------------------------------------
+#                                                  \+=---------------=+/
 
-    data = {
-        'length': len(response),
-        'records': response
-    }
-
-    return json.dumps(data, sort_keys=True, indent=2), 200
-
-
-@app.route('/sync/record', methods=['POST'])
-def sync_record():
-    # Generate record object from request data
-    record = generate_record_from_request(request.get_json())
-
-    # Record is None with invalid request data
-    if record is None:
-        return 'Invalid data provided to create maintenance record', 400
-
-    # Add new record to record pool
-    blockchain.record_pool.add_record(record)
-    return 'Record added to pool', 200
-
-
-# ---------------------------------------------------[Register Nodes]---------------------------------------------------
+@app.route('/node/ping', methods=['GET'])
+def ping():
+    logger.info("Node was asked for a status update")
+    return 'OK', 200
 
 
 @app.route('/node', methods=['POST'])
 def accept_peer():
-    # TODO: Should add some authentication to prevent anyone registering to the blockchain.
-
     # Check address is provided
     if 'node_address' not in request.get_json():
         return 'Node address not provided', 400
     address = str(request.get_json()['node_address'])
+
+    logger.info(f"Node was asked to add '{address}' to the network")
 
     # Response with Bad Request if node already registered
     if address in peers:
@@ -111,8 +77,6 @@ def accept_peer():
 
     # Get most update to date chain on the network
     peer_chain_consensus()
-
-    # TODO: Add peer to chord
 
     # Return the node a list of peers on the network and an updated version of the chain
     response_peers = peers.copy()
@@ -130,8 +94,9 @@ def accept_peer():
 
 @app.route('/node/register', methods=['POST'])
 def register_node():
-    global node_address
-    global chord
+    global node_address, chord
+
+    logger.info("Node was asked to register itself with discovery node")
 
     # Discovery nodes needs address to update list of addresses.
     if 'node_address' not in request.args:
@@ -139,7 +104,7 @@ def register_node():
 
     # Generate data and headers for POST request
     node_address = request.args['node_address']
-    data = {'node_address': request.args['node_address']}
+    data = {'node_address': node_address}
     headers = {'Content-Type': 'application/json'}
 
     # Send request to directory node for chain and peer list
@@ -147,37 +112,72 @@ def register_node():
 
     # If request successful, update chain and list of peers
     if response.status_code == 200:
-        chord = Chord(node_address)
+        join_chord_network()
         blockchain.chain = chain_utils.get_chain_from_json(response.json()['chain'])
-        for peer in response.json()['peers']:
-            peers.append(peer)
+        for response_peer in response.json()['peers']:
+            if response_peer not in peers and response_peer != node_address:
+                peers.append(response_peer)
         return json.dumps(peers, sort_keys=True, indent=2), 200
     else:
         return response.content, 400
 
 
-@app.route('/node', methods=['GET'])
-def sync_peers():
-    # Sync node's peer list by requesting other node's peer lists
-    for peer in peers:
-        response = requests.get(f"http://{peer}/sync/node")
-        for response_peer in response.json()['peers']:
-            if response_peer not in peers and response_peer != node_address:
-                peers.append(response_peer)
-    return 'Synced peers', 200
+#                                                    /+=----------=+\
+# -------------------------------------------------=+|  Blockchain  |+=-------------------------------------------------
+#                                                    \+=----------=+/
+
+@app.route('/chain', methods=['GET'])
+def get_chain():
+    logger.info("Node was asked to return its chain and peer list")
+    response = {
+        'length': len(blockchain.chain),
+        'chain': chain_utils.get_chain_json(blockchain.chain),
+        'peers': peers
+    }
+    return json.dumps(response, sort_keys=True, indent=2), 200
 
 
-@app.route('/sync/node', methods=['GET'])
-def get_peers():
-    # Respond with list of peers
-    data = {'peers': peers}
-    return json.dumps(data)
+@app.route('/chain/record-pool', methods=['POST', 'GET'])
+def manage_records():
+    if request.method == 'POST':
+        logger.info("Node was asked to add a record to its pool")
+
+        # Generate record from request data
+        record = generate_record_from_request(request.form)
+
+        # Generate record returns None with invalid data
+        if record is None or not block_utils.is_record_valid(record):
+            return 'Invalid data provided to create maintenance record', 400
+
+        # Add record to record pool
+        blockchain.record_pool.add_record(record)
+
+        # Broadcast record to peers
+        broadcast_record_to_peers(record)
+
+        return 'Record added to pool', 200
+    else:
+        logger.info("Node was asked to return its record pool")
+
+        # Get unverified records in JSON serializable format
+        response = []
+        for record in blockchain.record_pool.unverified_records:
+            response.append(record.__dict__)
+
+        data = {
+            'length': len(response),
+            'records': response
+        }
+
+        return json.dumps(data, sort_keys=True, indent=2), 200
 
 
-# -----------------------------------------------------[Mine Blocks]----------------------------------------------------
+# ---------------------------------------------------[Mine/Add Blocks]--------------------------------------------------
 
-@app.route('/mine', methods=['GET'])
+@app.route('/chain/mine', methods=['GET'])
 def mine_block():
+    logger.info("Node was asked to mine a block")
+
     # Mine a block
     mined_block = blockchain.mine()
 
@@ -194,12 +194,14 @@ def mine_block():
     # If node's chain is most up to date, broadcast it to peer's to synchronise chain
     if length_of_chain == len(blockchain.chain):
         broadcast_block_to_peers(mined_block)
-    
+
     return f'Block added to chain with index {mined_block.index}', 200
 
 
-@app.route('/add_block', methods=['POST'])
+@app.route('/chain/add-block', methods=['POST'])
 def add_block():
+    logger.info("Node was asked to add a block")
+
     # Generate block object from request
     block = generate_block_from_request(request.get_json())
 
@@ -216,36 +218,110 @@ def add_block():
         return "There was an error when adding block", 400
 
 
-# ----------------------------------------------------[Chord Endpoints]-------------------------------------------------
+# ------------------------------------------------[Chain Synchronisation]-----------------------------------------------
 
-@app.route('/chord/find_successor', methods=['GET'])
+@app.route('/chain/sync/record', methods=['POST'])
+def sync_record():
+    logger.info("Node was asked to sync its record pool")
+
+    # Generate record object from request data
+    record = generate_record_from_request(request.get_json())
+
+    # Record is None with invalid request data
+    if record is None:
+        return 'Invalid data provided to create maintenance record', 400
+
+    # Add new record to record pool
+    blockchain.record_pool.add_record(record)
+    return 'Record added to pool', 200
+
+
+@app.route('/chain/sync/peers', methods=['GET'])
+def sync_peers():
+    logger.info("Node was asked to sync its peer list")
+
+    # Sync node's peer list by requesting other node's peer lists
+    for peer in peers:
+        response = requests.get(f"http://{peer}/discovery/peers")
+        for response_peer in response.json()['peers']:
+            if response_peer not in peers and response_peer != node_address:
+                peers.append(response_peer)
+    return 'Synced peers', 200
+
+
+#                                                      /+=-------=+\
+# ---------------------------------------------------=+|   Chord   |+=--------------------------------------------------
+#                                                      \+=-------=+/
+
+@app.route('/chord/lookup', methods=['GET'])
 def find_successor():
+    if 'key' not in request.args:
+        return 'No key was given in request', 400
+
     key = request.args['key']
-    successor = {'successor': chord.find_successor(key)}
-    return successor, 200
+
+    if chord.node_address == chord.successor:
+        successor = {'successor': chord.node_address}
+    else:
+        successor = {'successor': chord.find_successor(key)}
+
+    return json.dumps(successor), 200
 
 
 @app.route('/chord/predecessor', methods=['GET'])
-def find_successor():
-    predecessor = {'successor': chord.predecessor}
-    return predecessor, 200
+def get_predecessor():
+    logger.info("Node was asked to return its chord predecessor")
+    return json.dumps({'predecessor': chord.predecessor}), 200
+
+
+@app.route('/chord/successor', methods=['GET'])
+def get_successor():
+    logger.info("Node was asked to return its chord predecessor")
+    return json.dumps({'successor': chord.successor}), 200
 
 
 @app.route('/chord/notify', methods=['POST'])
 def notify():
-    potential_predecessor = request.args['predecessor']
-    if chord.predecessor is None or \
-        chord_utils.get_hash(chord.predecessor) < chord_utils.get_hash(potential_predecessor) < chord.node_id:
-        chord.predecessor = potential_predecessor
+    if 'predecessor' in request.get_json():
+        logger.info(f"Node '{request.get_json()['predecessor']}' may be our predecessor")
+        potential_predecessor = request.get_json()['predecessor']
+        potential_predecessor_hash = chord_utils.get_hash(potential_predecessor)
+        if chord.predecessor is None:
+            logger.info(f"Node has new predecessor '{potential_predecessor}'")
+            chord.predecessor = potential_predecessor
+        elif chord_utils.get_hash(chord.predecessor) <= potential_predecessor_hash <= chord.node_id or \
+                chord.node_id <= chord_utils.get_hash(chord.predecessor) <= potential_predecessor_hash:
+            logger.info(f"Node has new predecessor '{potential_predecessor}'")
+            chord.predecessor = potential_predecessor
+        return 'OK', 200
+    else:
+        logger.info("Notify request missing predecessor data")
+        return 'Missing predecessor data', 400
+
+
+@app.route('/chord/stabalise', methods=['GET'])
+def stabalise_chord_node():
+    logger.info("Node was asked to stabalise its chord instance")
+    chord.stabalise()
     return 'OK', 200
 
 
-@app.route('/chord/ping', methods=['GET'])
-def ping():
+@app.route('/chord/update', methods=['GET'])
+def update_chord():
+    logger.info("Node was asked to update its finger table")
+    chord.fix_fingers()
     return 'OK', 200
 
-# --------------------------------------------------[Broadcast Functions]-----------------------------------------------
 
+@app.route('/chord/finger-table', methods=['GET'])
+def get_finger_table():
+    logger.info("Node was asked to return its chord finger table")
+    return json.dumps({'finger_table': json.dumps(chord.finger_table)}, sort_keys=True, indent=2), 200
+
+
+#                                                 /+=-------------------=+\
+# ----------------------------------------------=+|  Broadcast Functions  |+=-------------------------------------------
+#                                                 \+=-------------------=+/
 
 def peer_chain_consensus():
     updated_chain = False
@@ -271,7 +347,14 @@ def broadcast_block_to_peers(block):
     headers = {'Content-Type': "application/json"}
 
     for peer in peers:
-        requests.post(f"http://{peer}/add_block", data=json.dumps(data), headers=headers)
+        requests.post(f"http://{peer}/chain/add-block", data=json.dumps(data), headers=headers)
+
+
+def broadcast_chord_update(nodes_to_update):
+    # Get all peers known to discovery node
+    for node in nodes_to_update:
+        logger.info(f"Telling '{node}' to update their finger table")
+        requests.get(f"http://{node}/chord/update")
 
 
 def broadcast_record_to_peers(record):
@@ -285,11 +368,12 @@ def broadcast_record_to_peers(record):
 
     # Send unverified record to all known peer's in the network
     for peer in peers:
-        requests.post(f"http://{peer}/sync/record", data=json.dumps(data), headers=headers)
+        requests.post(f"http://{peer}/chain/sync/record", data=json.dumps(data), headers=headers)
 
 
-# ---------------------------------------------------[Utility Functions]------------------------------------------------
-
+#                                                 /+=-------------------=+\
+# ----------------------------------------------=+|   Utility Functions   |+=-------------------------------------------
+#                                                 \+=-------------------=+/
 
 def generate_record_from_request(record_json):
     # Parameters needed for a valid record
@@ -311,3 +395,25 @@ def generate_block_from_request(block_json):
         return None
 
     return block_utils.get_block_object_from_dict(block_json)
+
+
+def join_chord_network():
+    global chord
+    # Initialising chord node
+    chord = Chord(node_address)
+
+    # Notify node's successor of our existence
+    chord_utils.notify_successor(chord.successor, chord.node_address)
+
+    # Tell successor to stabalise
+    chord_utils.stabalise_node(chord.successor)
+
+    # Predecessor and successor points are correct, fix finger tables of effected nodes
+    chord.fix_fingers()
+
+    nodes_to_update = []
+    if chord.successor is not node_address:
+        nodes_to_update.append(chord.successor)
+    if chord.successor is not chord.predecessor:
+        nodes_to_update.append(chord.predecessor)
+    broadcast_chord_update(nodes_to_update)
