@@ -1,12 +1,13 @@
-import os
 import json
-import requests
+import os
 
+import requests
 from flask import Flask, request
-from blockchain.chord.chord import Chord
-from blockchain.chain import Blockchain
+
 from blockchain import chain_utils, block_utils
+from blockchain.chain import Blockchain
 from blockchain.chord import chord_utils
+from blockchain.chord.chord import Chord
 
 app = Flask(__name__)
 
@@ -292,7 +293,11 @@ def notify():
         elif chord_utils.get_hash(chord.predecessor) <= potential_predecessor_hash <= chord.node_id or \
                 chord.node_id <= chord_utils.get_hash(chord.predecessor) <= potential_predecessor_hash:
             logger.info(f"Node has new predecessor '{potential_predecessor}'")
+            old_predecessor = chord.predecessor
+            
             chord.predecessor = potential_predecessor
+
+            chord_utils.stabalise_node(old_predecessor)
         return 'OK', 200
     else:
         logger.info("Notify request missing predecessor data")

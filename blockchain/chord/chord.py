@@ -37,11 +37,10 @@ class Chord:
     def find_successor(self, key):
         key = float(key)
         # Key exists between current node and it's successor
-        if self.node_id <= key <= chord_utils.get_hash(self.successor):
+        if self.node_id <= key <= chord_utils.get_hash(self.successor) or \
+                chord_utils.get_hash(self.successor) < self.node_id < key or \
+                key < chord_utils.get_hash(self.successor) < self.node_id:
             # Return successor's address
-            logger.info(f"[{self.node_address}]: Successor of 'key' is '{self.successor}'")
-            return self.successor
-        elif chord_utils.get_hash(self.successor) < self.node_id < key:
             logger.info(f"[{self.node_address}]: Successor of 'key' is '{self.successor}'")
             return self.successor
         else:
@@ -61,13 +60,14 @@ class Chord:
         key = float(key)
         # Iterate backwards through finger table to find preceding node to key
         for i in range(self.identifier_length - 1, -1, -1):
-            if self.node_id <= self.finger_table[i][0] <= key:
+            if self.node_id < chord_utils.get_hash(self.finger_table[i][1]) <= key or \
+                    key <= self.node_id < chord_utils.get_hash(self.finger_table[i][1]):
                 return self.finger_table[i][1]
 
         # If key is smaller than node's id, jump to farthest known peer to restart search.
-        for i in range(self.identifier_length - 1, -1, -1):
-            if self.finger_table[i][1] != self.node_address:
-                return self.finger_table[i][1]
+        # for i in range(self.identifier_length - 1, -1, -1):
+        #     if self.finger_table[i][1] != self.node_address:
+        #         return self.finger_table[i][1]
 
         return self.successor
 
@@ -97,7 +97,8 @@ class Chord:
         else:
             # Verify our successor's predecessor is correct
             successors_predecessor = chord_utils.get_predecessor(self.successor)
-            if self.node_id <= chord_utils.get_hash(successors_predecessor) <= chord_utils.get_hash(self.successor):
+            if self.node_id < chord_utils.get_hash(successors_predecessor) <= chord_utils.get_hash(self.successor) or \
+                    chord_utils.get_hash(self.successor) < self.node_id < chord_utils.get_hash(successors_predecessor):
                 # Update our successor, it is incorrect
                 self.successor = successors_predecessor
                 logger.info(f"[{self.node_address}]: Found new successor '{self.successor}'")
