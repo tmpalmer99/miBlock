@@ -31,6 +31,8 @@ do
 	docker run -p 500$i:5000 -d miblock
 done
 
+sleep 1
+
 echo -e ">> Initialising discover node '127.0.0.1:5000'..."
 curl http://127.0.0.1:5000/discovery/initialise
 echo -e ""

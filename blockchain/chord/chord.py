@@ -10,6 +10,7 @@ logger = chain_utils.init_logger("Chord")
 class Chord:
     node_id = None
     successor = None
+    stored_files = []
     predecessor = None
     node_address = None
     identifier_length = 10

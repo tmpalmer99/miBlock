@@ -1,3 +1,6 @@
+import os
+
+from blockchain import chain_utils
 from blockchain.block import Block
 from blockchain.maintenance_record import MaintenanceRecord
 
@@ -36,8 +39,7 @@ def get_record_object_from_dict(record_dict):
     """
     return MaintenanceRecord(record_dict['aircraft_reg_number'],
                              record_dict['date_of_record'],
-                             record_dict['filename'],
-                             record_dict['file_path'])
+                             record_dict['filename'])
 
 
 def get_block_dict_from_object(block):
@@ -48,7 +50,13 @@ def get_block_dict_from_object(block):
     """
     formatted_records = []
     for record in block.records:
-        formatted_records.append(record.__dict__)
+        record_data = {
+            'aircraft_reg_number': record.aircraft_reg_number,
+            'date_of_record': record.date_of_record,
+            'filename': record.filename,
+            'file_hash': record.file_hash
+        }
+        formatted_records.append(record_data)
 
     block_dict = {
         'index': block.index,
@@ -74,3 +82,35 @@ def is_record_valid(record):
     if not str(record.file_path).split("/")[-1] == record.filename:
         return False
     return True
+
+
+def maintenance_record_exists(filename):
+    file_path = str(chain_utils.get_app_root_directory()) + f"/data/records/unused/{filename}"
+    return os.path.exists(file_path)
+
+
+def path_to_unused_record(filename):
+    if maintenance_record_exists(filename):
+        return str(chain_utils.get_app_root_directory()) + f"/data/records/unused/{filename}"
+    return None
+
+
+def path_to_record_storage():
+    path = str(chain_utils.get_app_root_directory()) + "/data/records/used"
+    if os.path.exists(path):
+        return path
+    else:
+        return None
+
+
+def move_record_file(filename):
+    write_file = open(path_to_record_storage() + "/" + filename, 'wb')
+    with open(path_to_unused_record(filename), 'rb') as read_file:
+        while True:
+            data = read_file.read(1024)
+            if not data:
+                break
+            write_file.write(data)
+
+
+

@@ -1,5 +1,8 @@
 import json
 import os
+import socket
+import ssl
+import hashlib
 
 import requests
 from flask import Flask, request
@@ -37,6 +40,7 @@ chord = None
 # --------------------------------------------------=+|  Discovery  |+=-------------------------------------------------
 #                                                     \+=---------=+/
 
+# Discovery node initialises the network
 @app.route('/discovery/initialise', methods=['GET'])
 def init_discover_node():
     global chord, node_address
@@ -47,6 +51,7 @@ def init_discover_node():
     return 'Discovery Node Initialised', 200
 
 
+# Ask a node to return its list of known peers
 @app.route('/discovery/peers', methods=['GET'])
 def get_known_peers():
     logger.info("Node was asked to return its list of peers")
@@ -57,12 +62,57 @@ def get_known_peers():
 # -----------------------------------------------=+|  Node Management  |+=----------------------------------------------
 #                                                  \+=---------------=+/
 
+# Ping a node to check its status
 @app.route('/node/ping', methods=['GET'])
 def ping():
     logger.info("Node was asked for a status update")
     return 'OK', 200
 
 
+# Receive a record file from a peer in the network
+@app.route('/node/record', methods=['POST'])
+def receive_file():
+    if 'file_name' not in request.get_json():
+        return 'File name was not provided', 400
+    filename = request.get_json()['file_name']
+
+    # Create socket and ssl context
+    context = ssl.create_default_context()
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM, 0)
+
+    # Bind and listen
+    sock.bind(('172.17.0.1', 443))
+    sock.listen()
+
+    # Wrap socket with ssl context and accept incoming connection
+    ssock = context.wrap_socket(sock, server_side=True)
+    conn, addr = ssock.accept()
+    logger.info(f"Made connection with address '{addr}', receiving file '{filename}'")
+
+    # Create file in record storage directory
+    storage_path = block_utils.path_to_record_storage()
+    file_path = storage_path + "/" + filename
+
+    # Write incoming data to new file
+    with open(file_path, 'wb') as file:
+        while True:
+            data = ssock.read(1024)
+            # no more data received
+            if not data:
+                break
+            file.write(data)
+        file.close()
+
+    # Close connection and socket
+    conn.close()
+    ssock.close()
+    sock.close()
+
+    # Add the filename to a list of files stored on this node
+    chord.stored_files.append(filename)
+
+
+# ENDPOINT FOR DISCOVERY NODE - Accepts a new nodes registration request
 @app.route('/node', methods=['POST'])
 def accept_peer():
     # Check address is provided
@@ -93,6 +143,7 @@ def accept_peer():
     return json.dumps(response, sort_keys=True, indent=2), 200
 
 
+# Send a request to discovery node to join the blockchain network
 @app.route('/node/register', methods=['POST'])
 def register_node():
     global node_address, chord
@@ -118,7 +169,9 @@ def register_node():
             if response_peer not in peers and response_peer != node_address:
                 peers.append(response_peer)
 
+        # Join the Chord network
         join_chord_network()
+
         return json.dumps(peers, sort_keys=True, indent=2), 200
     else:
         return response.content, 400
@@ -128,6 +181,7 @@ def register_node():
 # -------------------------------------------------=+|  Blockchain  |+=-------------------------------------------------
 #                                                    \+=----------=+/
 
+# Get chain and peer information from a peer
 @app.route('/chain', methods=['GET'])
 def get_chain():
     logger.info("Node was asked to return its chain and peer list")
@@ -139,6 +193,7 @@ def get_chain():
     return json.dumps(response, sort_keys=True, indent=2), 200
 
 
+# Get records from or add records to a node's record pool
 @app.route('/chain/record-pool', methods=['POST', 'GET'])
 def manage_records():
     if request.method == 'POST':
@@ -156,6 +211,18 @@ def manage_records():
 
         # Broadcast record to peers
         broadcast_record_to_peers(record)
+
+        # Send record to its successor
+        file_successor = chord_utils.find_successor(node_address, chord_utils.get_hash(record.filename))
+        logger.info(f"Maintenance record's successor is '{file_successor}'")
+        if str(file_successor) != str(node_address):
+            # Send record file to successor
+            send_file_to_peer(file_successor, record.filename)
+        else:
+            # We are the file successor, move file to record storage
+            logger.debug(f"Moving file from unused records to record storage directory")
+            block_utils.move_record_file(record.filename)
+            chord.stored_files.append(record.filename)
 
         return 'Record added to pool', 200
     else:
@@ -176,6 +243,7 @@ def manage_records():
 
 # ---------------------------------------------------[Mine/Add Blocks]--------------------------------------------------
 
+# Make a node mind a block
 @app.route('/chain/mine', methods=['GET'])
 def mine_block():
     logger.info("Node was asked to mine a block")
@@ -200,6 +268,7 @@ def mine_block():
     return f'Block added to chain with index {mined_block.index}', 200
 
 
+# Solved blocks are sent to a peer via this endpoint, new block is added to the peer's chain
 @app.route('/chain/add-block', methods=['POST'])
 def add_block():
     logger.info("Node was asked to add a block")
@@ -222,6 +291,7 @@ def add_block():
 
 # ------------------------------------------------[Chain Synchronisation]-----------------------------------------------
 
+# Send a new unverified record to all peers
 @app.route('/chain/sync/record', methods=['POST'])
 def sync_record():
     logger.info("Node was asked to sync its record pool")
@@ -238,6 +308,7 @@ def sync_record():
     return 'Record added to pool', 200
 
 
+# Ask peers for their list of peers to get an up to date list of active peers
 @app.route('/chain/sync/peers', methods=['GET'])
 def sync_peers():
     logger.info("Node was asked to sync its peer list")
@@ -255,6 +326,7 @@ def sync_peers():
 # ---------------------------------------------------=+|   Chord   |+=--------------------------------------------------
 #                                                      \+=-------=+/
 
+# Searches for the successor node of a key
 @app.route('/chord/lookup', methods=['GET'])
 def find_successor():
     if 'key' not in request.args:
@@ -270,18 +342,21 @@ def find_successor():
     return json.dumps(successor), 200
 
 
+# Gets the node's chord predecessor
 @app.route('/chord/predecessor', methods=['GET'])
 def get_predecessor():
     logger.info("Node was asked to return its chord predecessor")
     return json.dumps({'predecessor': chord.predecessor}), 200
 
 
+# Gets the node's chord successor
 @app.route('/chord/successor', methods=['GET'])
 def get_successor():
     logger.info("Node was asked to return its chord predecessor")
     return json.dumps({'successor': chord.successor}), 200
 
 
+# Notifies a chord node of a new potential predecessor
 @app.route('/chord/notify', methods=['POST'])
 def notify():
     if 'predecessor' in request.get_json():
@@ -305,6 +380,7 @@ def notify():
         return 'Missing predecessor data', 400
 
 
+# Tells a chord node to stabalise
 @app.route('/chord/stabalise', methods=['GET'])
 def stabalise_chord_node():
     logger.info("Node was asked to stabalise its chord instance")
@@ -312,6 +388,7 @@ def stabalise_chord_node():
     return 'OK', 200
 
 
+# Tells a chord node to update their finger table
 @app.route('/chord/update', methods=['GET'])
 def update_chord():
     logger.info("Node was asked to update its finger table")
@@ -319,6 +396,7 @@ def update_chord():
     return 'OK', 200
 
 
+# Requests a chord node's finger table
 @app.route('/chord/finger-table', methods=['GET'])
 def get_finger_table():
     logger.info("Node was asked to return its chord finger table")
@@ -329,6 +407,7 @@ def get_finger_table():
 # ----------------------------------------------=+|  Broadcast Functions  |+=-------------------------------------------
 #                                                 \+=-------------------=+/
 
+# Attempts to establish chain consensus amongst known peers
 def peer_chain_consensus():
     updated_chain = False
 
@@ -347,6 +426,7 @@ def peer_chain_consensus():
             chain_utils.write_chain(blockchain.chain)
 
 
+# Broadcasts a solved block to the network
 def broadcast_block_to_peers(block):
     # Send solved block to all known peer's in the network
     data = block_utils.get_block_dict_from_object(block)
@@ -356,6 +436,7 @@ def broadcast_block_to_peers(block):
         requests.post(f"http://{peer}/chain/add-block", data=json.dumps(data), headers=headers)
 
 
+# Tells known peers to update their finger tables
 def broadcast_chord_update(nodes_to_update):
     # Get all peers known to discovery node
     for node in nodes_to_update:
@@ -363,6 +444,7 @@ def broadcast_chord_update(nodes_to_update):
         requests.get(f"http://{node}/chord/update")
 
 
+# Broadcasts a new unverified record to the network
 def broadcast_record_to_peers(record):
     data = {
         'aircraft_reg_number': record.aircraft_reg_number,
@@ -377,21 +459,67 @@ def broadcast_record_to_peers(record):
         requests.post(f"http://{peer}/chain/sync/record", data=json.dumps(data), headers=headers)
 
 
+# Send a maintenance record to it's successor
+def send_file_to_peer(successor_peer, filename):
+    data = json.dumps({'file_name': filename})
+    headers = {'Content-Type': "application/json"}
+
+    # Tell peer to expect an incoming connection
+    requests.post(f"http://{successor_peer}/node/record", data=data, headers=headers)
+
+    # Create ssl context
+    context = ssl.create_default_context()
+
+    # Set up secure socket
+    sock = socket.create_connection(('172.17.0.1', 443))
+
+    # Wrap socket with ssl context
+    ssock = context.wrap_socket(sock, server_hostname='172.17.0.1')
+
+    # Get path to record file in directory of example records
+    file_path = block_utils.path_to_unused_record(filename)
+
+    # MD5 checksum
+    md5_hash = hashlib.md5()
+
+    # Open file and continiously send blocks of data to peer until file is fully read
+    with open(file_path, 'rb') as file:
+        while True:
+            data = file.readline()
+            md5_hash.update(data)
+            # Reached end of file, no more data to read
+            if not data:
+                ssock.send(b"CHECKSUM\n")
+                ssock.send(md5_hash.hexdigest())
+                break
+            ssock.send(data)
+        file.close()
+
+    # Close socket after use
+    ssock.close()
+    sock.close()
+
+
 #                                                 /+=-------------------=+\
 # ----------------------------------------------=+|   Utility Functions   |+=-------------------------------------------
 #                                                 \+=-------------------=+/
 
+# Creates a MaintenanceRecord object from a request
 def generate_record_from_request(record_json):
     # Parameters needed for a valid record
-    record_parameters = ['aircraft_reg_number', 'date_of_record', 'filename', 'file_path']
+    record_parameters = ['aircraft_reg_number', 'date_of_record', 'filename']
 
     # Bad request if request does not contain all correct
     if not all(param in record_json for param in record_parameters):
         return None
 
+    if not block_utils.maintenance_record_exists(record_json['filename']):
+        return None
+
     return block_utils.get_record_object_from_dict(record_json)
 
 
+# Creates a Block object from a request
 def generate_block_from_request(block_json):
     # Parameters needed for a valid block
     block_parameters = ['index', 'previous_hash', 'timestamp', 'nonce', 'records', 'hash']
@@ -403,6 +531,7 @@ def generate_block_from_request(block_json):
     return block_utils.get_block_object_from_dict(block_json)
 
 
+# Allows a node to join the chord network
 def join_chord_network():
     global chord
     # Initialising chord node
