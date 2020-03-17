@@ -113,11 +113,12 @@ def register_node():
 
     # If request successful, update chain and list of peers
     if response.status_code == 200:
-        join_chord_network()
         blockchain.chain = chain_utils.get_chain_from_json(response.json()['chain'])
         for response_peer in response.json()['peers']:
             if response_peer not in peers and response_peer != node_address:
                 peers.append(response_peer)
+
+        join_chord_network()
         return json.dumps(peers, sort_keys=True, indent=2), 200
     else:
         return response.content, 400
@@ -290,8 +291,8 @@ def notify():
         if chord.predecessor is None:
             logger.info(f"Node has new predecessor '{potential_predecessor}'")
             chord.predecessor = potential_predecessor
-        elif chord_utils.get_hash(chord.predecessor) <= potential_predecessor_hash <= chord.node_id or \
-                chord.node_id <= chord_utils.get_hash(chord.predecessor) <= potential_predecessor_hash:
+        elif chord_utils.get_hash(chord.predecessor) < potential_predecessor_hash < chord.node_id or \
+                chord.node_id < chord_utils.get_hash(chord.predecessor) < potential_predecessor_hash:
             logger.info(f"Node has new predecessor '{potential_predecessor}'")
             old_predecessor = chord.predecessor
             
@@ -408,17 +409,16 @@ def join_chord_network():
     chord = Chord(node_address)
 
     # Notify node's successor of our existence
+    logger.debug("Notifying our successor")
     chord_utils.notify_successor(chord.successor, chord.node_address)
 
     # Tell successor to stabalise
+    logger.debug("Stabalising our successor")
     chord_utils.stabalise_node(chord.successor)
 
     # Predecessor and successor points are correct, fix finger tables of effected nodes
+    logger.debug("Fixing our finger table")
     chord.fix_fingers()
 
-    nodes_to_update = []
-    if chord.successor is not node_address:
-        nodes_to_update.append(chord.successor)
-    if chord.successor is not chord.predecessor:
-        nodes_to_update.append(chord.predecessor)
-    broadcast_chord_update(nodes_to_update)
+    logger.debug("Telling peers to update their finger tables")
+    broadcast_chord_update(peers)

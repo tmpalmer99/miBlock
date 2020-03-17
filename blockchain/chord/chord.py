@@ -8,12 +8,12 @@ logger = chain_utils.init_logger("Chord")
 
 
 class Chord:
-    node_address = None
     node_id = None
-    finger_table = []
     successor = None
     predecessor = None
+    node_address = None
     identifier_length = 10
+    finger_table = [[None, None] for i in range(identifier_length)]
 
     def __init__(self, ip_address):
         # Set node address and ID information
@@ -26,7 +26,7 @@ class Chord:
         if self.node_address == '172.17.0.1:5000':
             for i in range(self.identifier_length):
                 chord_id = (self.node_id + math.pow(2, i)) % math.pow(2, self.identifier_length)
-                self.finger_table.append([chord_id, self.node_address])
+                self.finger_table[i] = [chord_id, str(self.node_address)]
             self.successor = self.node_address
         else:
             # Ask discovery node to find node's successor
@@ -37,7 +37,7 @@ class Chord:
     def find_successor(self, key):
         key = float(key)
         # Key exists between current node and it's successor
-        if self.node_id <= key <= chord_utils.get_hash(self.successor) or \
+        if self.node_id < key < chord_utils.get_hash(self.successor) or \
                 chord_utils.get_hash(self.successor) < self.node_id < key or \
                 key < chord_utils.get_hash(self.successor) < self.node_id:
             # Return successor's address
@@ -63,28 +63,15 @@ class Chord:
             if self.node_id < chord_utils.get_hash(self.finger_table[i][1]) <= key or \
                     key <= self.node_id < chord_utils.get_hash(self.finger_table[i][1]):
                 return self.finger_table[i][1]
-
-        # If key is smaller than node's id, jump to farthest known peer to restart search.
-        # for i in range(self.identifier_length - 1, -1, -1):
-        #     if self.finger_table[i][1] != self.node_address:
-        #         return self.finger_table[i][1]
-
         return self.successor
 
     def fix_fingers(self):
         logger.info(f"[{self.node_address}]: Fixing finger table for {self.node_address}")
-        if len(self.finger_table) == 0:
-            for index in range(self.identifier_length):
-                # chord_id = succ(n+2^i)
-                chord_id = (self.node_id + math.pow(2, index)) % math.pow(2, self.identifier_length)
-                # Finger table no complete, ask discovery node to find successor
-                successor = str(chord_utils.find_successor('172.17.0.1:5000', chord_id))
-                logger.info(f"[{self.node_address}]: Fixing Table - succ({chord_id}): {successor}")
-                self.finger_table.append([chord_id, successor])
-        else:
-            for index in range(len(self.finger_table)):
-                chord_id = self.finger_table[index][0]
-                self.finger_table[index][1] = str(self.find_successor(chord_id))
+        for index in range(self.identifier_length):
+            finger_id = (self.node_id + math.pow(2, index)) % math.pow(2, self.identifier_length)
+            key_successor = self.find_successor(finger_id)
+
+            self.finger_table[index] = [finger_id, key_successor]
 
     def stabalise(self):
         logger.info(f"[{self.node_address}]: Stabilising...")
@@ -94,10 +81,12 @@ class Chord:
             self.successor = self.predecessor
             successors_predecessor = self.predecessor
             logger.info(f"[{self.node_address}]: Found new successor '{self.successor}'")
+            # TODO: THIS MAY CAUSE PROBLEMS
+            chord_utils.notify_successor(successors_predecessor, self.node_address)
         else:
             # Verify our successor's predecessor is correct
             successors_predecessor = chord_utils.get_predecessor(self.successor)
-            if self.node_id < chord_utils.get_hash(successors_predecessor) <= chord_utils.get_hash(self.successor) or \
+            if self.node_id < chord_utils.get_hash(successors_predecessor) < chord_utils.get_hash(self.successor) or \
                     chord_utils.get_hash(self.successor) < self.node_id < chord_utils.get_hash(successors_predecessor):
                 # Update our successor, it is incorrect
                 self.successor = successors_predecessor
@@ -105,8 +94,8 @@ class Chord:
 
             # Notify verified successor that we are their predecessor
             logger.info(f"[{self.node_address}]: Notifying '{successors_predecessor}' of our existence")
-
-        chord_utils.notify_successor(successors_predecessor, self.node_address)
+            # TODO: THIS MAY CAUSE PROBLEMS
+            chord_utils.notify_successor(successors_predecessor, self.node_address)
 
     def check_predecessor(self):
         # Check predecessor's status
