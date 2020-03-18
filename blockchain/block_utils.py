@@ -1,3 +1,4 @@
+import hashlib
 import os
 
 from blockchain import chain_utils
@@ -111,6 +112,28 @@ def move_record_file(filename):
             if not data:
                 break
             write_file.write(data)
+
+
+def get_checksum_of_file(file_path):
+    # MD5 checksum
+    md5_hash = hashlib.md5()
+
+    # Open file as file
+    with open(file_path, 'rb') as file:
+        while True:
+            # Read 1024 bytes
+            data = file.read(1024)
+
+            # Reached end of file, no more data to read
+            if not data:
+                break
+
+            # Update hash with new data
+            md5_hash.update(data)
+        # Close file when finished
+        file.close()
+
+    return md5_hash.hexdigest()
 
 
 
