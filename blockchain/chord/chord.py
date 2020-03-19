@@ -82,8 +82,6 @@ class Chord:
             self.successor = self.predecessor
             successors_predecessor = self.predecessor
             logger.info(f"[{self.node_address}]: Found new successor '{self.successor}'")
-            # TODO: THIS MAY CAUSE PROBLEMS
-            chord_utils.notify_successor(successors_predecessor, self.node_address)
         else:
             # Verify our successor's predecessor is correct
             successors_predecessor = chord_utils.get_predecessor(self.successor)
@@ -95,8 +93,7 @@ class Chord:
 
             # Notify verified successor that we are their predecessor
             logger.info(f"[{self.node_address}]: Notifying '{successors_predecessor}' of our existence")
-            # TODO: THIS MAY CAUSE PROBLEMS
-            chord_utils.notify_successor(successors_predecessor, self.node_address)
+        chord_utils.notify_successor(successors_predecessor, self.node_address)
 
     def check_predecessor(self):
         # Check predecessor's status

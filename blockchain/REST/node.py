@@ -212,7 +212,9 @@ def register_node():
         peers.append(response_peer)
 
     # Join the Chord network
-    join_chord_network()
+    response = join_chord_network()
+    if response != 0:
+        return response, 400
 
     return 'Registration to network was successful', 200
 
@@ -252,7 +254,7 @@ def manage_records():
         logger.info("Node was asked to add a record to its record pool")
 
         # Generate record from request data
-        record = generate_record_from_request(request.form)
+        record = generate_record_from_request(request.get_json())
 
         # Generate record returns None with invalid data
         if record is None or not block_utils.is_record_valid(record):
@@ -272,9 +274,12 @@ def manage_records():
             # Get hostname of file successor to set up a socket connection
             successor_hostname = requests.get(f"http://{file_successor}/node/hostname").json()['hostname']
 
+            # Adding record, so record exists in the unused records directory
+            file_path = block_utils.path_to_unused_record(record.filename)
+
             # Creating threads to setup server peer and client peer
             t1 = threading.Thread(target=initialise_receiving_peer, args=(file_successor, record.filename))
-            t2 = threading.Thread(target=send_file_to_peer, args=(successor_hostname, record.filename))
+            t2 = threading.Thread(target=send_file_to_peer, args=(successor_hostname, record.filename, file_path))
 
             # Start threads
             t1.start()
@@ -339,7 +344,7 @@ def mine_block():
     if length_of_chain == len(blockchain.chain):
         broadcast_block_to_peers(mined_block)
 
-    return f'Block added to chain with index {mined_block.index}', 200
+    return json.dumps(block_utils.get_block_dict_from_object(mined_block)), 200
 
 
 # -------------------------------------------------------------------------------------------\
@@ -496,6 +501,49 @@ def get_finger_table():
     return json.dumps({'finger_table': json.dumps(chord.finger_table)}, sort_keys=True, indent=2), 200
 
 
+# ----------------------------------------------------------------------------------\
+# Tells a chord node to check if files under their jurisdiction have new successors |
+# ----------------------------------------------------------------------------------/
+@app.route('/chord/sync/files', methods=['GET'])
+def check_file_successors():
+    moved_files = []
+    for file in chord.stored_files:
+        file_successor = chord.find_successor(chord_utils.get_hash(file))
+
+        if file_successor != node_address:
+            moved_files.append((file, file_successor))
+
+            if block_utils.stored_maintenance_record_exists(file):
+                # Get hostname of file successor to set up a socket connection
+                successor_hostname = requests.get(f"http://{file_successor}/node/hostname").json()['hostname']
+
+                # Record already verified, moving records location
+                file_path = block_utils.path_to_stored_record(file)
+
+                # Creating threads to setup server peer and client peer
+                t1 = threading.Thread(target=initialise_receiving_peer, args=(file_successor, file))
+                t2 = threading.Thread(target=send_file_to_peer, args=(successor_hostname, file, file_path))
+
+                # Start threads
+                t1.start()
+                # Allow time for server setup
+                time.sleep(0.5)
+                t2.start()
+
+                # Join threads
+                t1.join()
+                t2.join()
+
+    for file in moved_files:
+        response = requests.get(f"http://{file[1]}/node/file?filename={file[0]}")
+        if response.status_code != 200:
+            return f"File '{file[0]}' could not be moved to its successor", 400
+        else:
+            logger.info(f"Maintenance record '{file[0]}' was successfully stored at '{file[1]}'")
+
+    return 'OK', 200
+
+
 #                                                 /+=-------------------=+\
 # ----------------------------------------------=+|  Broadcast Functions  |+=-------------------------------------------
 #                                                 \+=-------------------=+/
@@ -553,12 +601,11 @@ def broadcast_record_to_peers(record):
 
 
 # Send a maintenance record to it's successor
-def send_file_to_peer(peer_hostname, filename):
-    # Get path to record file in directory of example records
-    file_path = block_utils.path_to_unused_record(filename)
-
+def send_file_to_peer(peer_hostname, filename, file_path):
     # Set up secure socket
     logger.info(f"Creating a socket and connecting to '{peer_hostname}:443")
+
+    # TODO: Create a try catch here, then spin for a TTL of 10. This will allow time for server setup to finish
     sock = socket.create_connection((peer_hostname, 443))
 
     # Open file and continuously send blocks of data to peer until file is fully read
@@ -596,6 +643,7 @@ def initialise_receiving_peer(successor_node, filename):
     response = requests.post(f"http://{successor_node}/node/record", data=data, headers=headers)
     return response.content, response.status_code
 
+
 #                                                 /+=-------------------=+\
 # ----------------------------------------------=+|   Utility Functions   |+=-------------------------------------------
 #                                                 \+=-------------------=+/
@@ -609,10 +657,10 @@ def generate_record_from_request(record_json):
     if not all(param in record_json for param in record_parameters):
         return None
 
-    if not block_utils.maintenance_record_exists(record_json['filename']):
-        return None
-
-    return block_utils.get_record_object_from_dict(record_json)
+    if block_utils.stored_maintenance_record_exists(record_json['filename']):
+        return block_utils.get_record_object_from_dict(record_json, stored=True)
+    else:
+        return block_utils.get_record_object_from_dict(record_json, stored=False)
 
 
 # Creates a Block object from a request
@@ -634,16 +682,25 @@ def join_chord_network():
     chord = Chord(node_address)
 
     # Notify node's successor of our existence
-    logger.debug("Notifying our successor")
+    logger.info("Notifying our successor")
     chord_utils.notify_successor(chord.successor, chord.node_address)
 
     # Tell successor to stabalise
-    logger.debug("Stabalising our successor")
+    logger.info("Stabalising our successor")
     chord_utils.stabalise_node(chord.successor)
 
     # Predecessor and successor points are correct, fix finger tables of effected nodes
-    logger.debug("Fixing our finger table")
+    logger.info("Fixing our finger table")
     chord.fix_fingers()
 
-    logger.debug("Telling peers to update their finger tables")
+    # Tell nodes of the chord network to update their finger tables foG-ZZZZ_21012019.pdfr the new changes
+    logger.info("Telling peers to update their finger tables")
     broadcast_chord_update(peers)
+
+    # Successor may have files in our jurisdiction, make sure they are sent to us
+    logger.info("Telling successor to update their file store")
+    response = requests.get(f"http://{chord.successor}/chord/sync/files")
+    if response.status_code != 200:
+        return response.reason
+
+    return 0

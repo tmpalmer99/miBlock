@@ -1,9 +1,6 @@
 import hashlib
 
 
-from blockchain import block_utils
-
-
 class MaintenanceRecord:
     aircraft_reg_number = None
     date_of_record = None
@@ -11,11 +8,11 @@ class MaintenanceRecord:
     file_hash = None
     file_path = None
 
-    def __init__(self, aircraft_reg_number, date_of_record, filename):
+    def __init__(self, aircraft_reg_number, date_of_record, filename, file_path):
         self.aircraft_reg_number = aircraft_reg_number
         self.date_of_record = date_of_record
         self.filename = filename
-        self.file_path = block_utils.path_to_unused_record(self.filename)
+        self.file_path = file_path
         self.file_hash = self.get_file_hash()
 
     def get_file_hash(self):

@@ -18,7 +18,7 @@ do
 done
 docker rm $(docker ps -a -q) > /dev/null 2>&1
 
-echo -e ">> Removing blocks.json..."
+echo -e ">> Removing blocks.json"
 rm data/blocks.json > /dev/null 2>&1
 
 echo -e ">> Building docker container image"
@@ -33,6 +33,11 @@ done
 
 sleep 1
 
-echo -e ">> Initialising discover node '127.0.0.1:5000'..."
+echo -e ">> Initialising discover node '127.0.0.1:5000'"
 curl http://127.0.0.1:5000/discovery/initialise
 echo -e ""
+
+echo -e ">> Running client"
+cd demo/
+clear
+python3 client.py -n $1

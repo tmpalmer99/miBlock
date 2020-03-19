@@ -22,7 +22,7 @@ def get_block_object_from_dict(block_dict):
 
     records = []
     for record_dict in block_dict["records"]:
-        record = get_record_object_from_dict(record_dict)
+        record = get_record_object_from_dict(record_dict, False)
         records.append(record)
 
     block = Block(index, previous_hash, timestamp, records, nonce)
@@ -32,15 +32,22 @@ def get_block_object_from_dict(block_dict):
     return None
 
 
-def get_record_object_from_dict(record_dict):
+def get_record_object_from_dict(record_dict, stored):
     """
     Converts a record in dictionary format to object form
+    :param stored:      Determines which directory
     :param record_dict: Record in dictionary format
     :return:            Record in MaintenanceRecord type
     """
+    if stored:
+        file_path = path_to_stored_record(record_dict['filename'])
+    else:
+        file_path = path_to_unused_record(record_dict['filename'])
+
     return MaintenanceRecord(record_dict['aircraft_reg_number'],
                              record_dict['date_of_record'],
-                             record_dict['filename'])
+                             record_dict['filename'],
+                             file_path)
 
 
 def get_block_dict_from_object(block):
@@ -85,14 +92,25 @@ def is_record_valid(record):
     return True
 
 
-def maintenance_record_exists(filename):
+def unused_maintenance_record_exists(filename):
     file_path = str(chain_utils.get_app_root_directory()) + f"/data/records/unused/{filename}"
     return os.path.exists(file_path)
 
 
+def stored_maintenance_record_exists(filename):
+    file_path = str(chain_utils.get_app_root_directory()) + f"/data/records/used/{filename}"
+    return os.path.exists(file_path)
+
+
 def path_to_unused_record(filename):
-    if maintenance_record_exists(filename):
+    if unused_maintenance_record_exists(filename):
         return str(chain_utils.get_app_root_directory()) + f"/data/records/unused/{filename}"
+    return None
+
+
+def path_to_stored_record(filename):
+    if unused_maintenance_record_exists(filename):
+        return str(chain_utils.get_app_root_directory()) + f"/data/records/used/{filename}"
     return None
 
 
@@ -134,6 +152,3 @@ def get_checksum_of_file(file_path):
         file.close()
 
     return md5_hash.hexdigest()
-
-
-
