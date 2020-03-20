@@ -61,9 +61,11 @@ class Chord:
         key = float(key)
         # Iterate backwards through finger table to find preceding node to key
         for i in range(self.identifier_length - 1, -1, -1):
-            if self.node_id < chord_utils.get_hash(self.finger_table[i][1]) <= key or \
-                    key <= self.node_id < chord_utils.get_hash(self.finger_table[i][1]):
-                return self.finger_table[i][1]
+            if self.finger_table[i][1] is not None:
+                if self.node_id < chord_utils.get_hash(self.finger_table[i][1]) <= key or \
+                        key <= self.node_id < chord_utils.get_hash(self.finger_table[i][1]):
+                    if key != self.finger_table[i][1]:
+                        return self.finger_table[i][1]
         return self.successor
 
     def fix_fingers(self):

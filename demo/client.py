@@ -1,14 +1,17 @@
 import getopt
 import json
 import os
+import time
 import sys
 
 import requests
+from prettytable import PrettyTable
 
 sys.path.insert(0, os.path.abspath('..'))
 
 import blockchain.chain_utils as chain_utils
 import blockchain.block_utils as block_utils
+import blockchain.chord.chord_utils as chord_utils
 import demo.client_utils as client_utils
 
 
@@ -49,13 +52,14 @@ def main(argv):
                     nodes_not_registered.append(f"127.0.0.1:500{i}")
                 nodes.append(f"127.0.0.1:500{i}")
     while True:
-        os.system('clear')
-        print_logo()
         if main_menu() == 1:
-            os.system('clear')
-            print_logo()
-            if node_menu() != 1:
+
+            node_menu_exit_code = 2
+            while node_menu_exit_code == 2:
+                node_menu_exit_code = node_menu()
+            if node_menu_exit_code == 0:
                 sys.exit()
+
         else:
             sys.exit()
 
@@ -66,6 +70,11 @@ def print_logo():
     logo = logo_file.read()
     print(logo)
 
+def print_chord_heading():
+    logo_path = str(chain_utils.get_app_root_directory()) + "/chord_heading"
+    logo_file = open(logo_path, 'r+')
+    logo = logo_file.read()
+    print(logo)
 
 # Method used to display user errors to the user in red text
 def print_error(message):
@@ -77,17 +86,18 @@ def print_success(message):
 
 
 def main_menu():
-    global active_node
+    global active_node, nodes_not_registered
+    os.system('clear')
+    print_logo()
     # Print list of available commands
     print("\n")
     print(f"Use the '{colours.COMMAND}login {colours.UNDERLINE}node_address{colours.ENDCOLOUR}{colours.ENDCOLOUR}'    "
           f"command to login to a specified node")
     print(f"Use the '{colours.COMMAND}register {colours.UNDERLINE}node_address{colours.ENDCOLOUR}{colours.ENDCOLOUR}' "
           f"command to register a node.")
-    print(f"Use the '{colours.COMMAND}nodes{colours.ENDCOLOUR}'                 "
-          f"command to show registered and unregistered nodes.")
-    print(f"Use the '{colours.COMMAND}quit{colours.ENDCOLOUR}'                  "
-          f"command to exit the program.")
+    print(f"Use the '{colours.COMMAND}register_all{colours.ENDCOLOUR}'          command to register all nodes.")
+    print(f"Use the '{colours.COMMAND}nodes{colours.ENDCOLOUR}'                 command to show registered and unregistered nodes.")
+    print(f"Use the '{colours.COMMAND}quit{colours.ENDCOLOUR}'                  command to exit the program.")
 
     # Continuously prompts user for commands until the application state changes
     while True:
@@ -124,8 +134,18 @@ def main_menu():
             else:
                 nodes_registered.append(node)
                 nodes_not_registered.remove(node)
-                print(f"{colours.SUCCESS}Node registration was successful.{colours.ENDCOLOUR}")
+                print_success(f"Registration was successful for node '{node}'")
 
+        elif command == "register_all":
+            print(nodes_not_registered)
+            for node in nodes_not_registered:
+                response = requests.post(f"http://{node}/node/register?node_address=172.17.0.1:{node.split(':')[1]}")
+                if response.status_code != 200:
+                    print_error(f"Registration was unsuccessful for node '{node}'")
+                else:
+                    nodes_registered.append(node)
+                    print_success(f"Registration was successful for node '{node}'")
+            nodes_not_registered = []
         elif command == "nodes":
             print("Available nodes: ", nodes)
             print("Registered nodes: ", nodes_registered)
@@ -137,13 +157,18 @@ def main_menu():
 
 
 def node_menu():
+    os.system('clear')
+    print_logo()
     print("\n")
     global active_node
     # Print list of available commands
     print(f"Use the '{colours.COMMAND}chain{colours.ENDCOLOUR}'  command return the node's chain.")
     print(f"Use the '{colours.COMMAND}mine{colours.ENDCOLOUR}'   command to mine a block of unverified records.")
     print(f"Use the '{colours.COMMAND}peers{colours.ENDCOLOUR}'  command return the node's known peers.")
-    print(f"Use the '{colours.COMMAND}record{colours.ENDCOLOUR}' command manage a nodes record pool.")
+    print(f"Use the '{colours.COMMAND}record{colours.ENDCOLOUR}' command to manage a nodes record pool.")
+    print(f"Use the '{colours.COMMAND}chord{colours.ENDCOLOUR}'  command to manage a nodes chord instance.")
+    print(f"Use the '{colours.COMMAND}sync{colours.ENDCOLOUR}'   command to sync a node's peers.")
+    print(f"Use the '{colours.COMMAND}clear{colours.ENDCOLOUR}'  command to clear the console.")
     print(f"Use the '{colours.COMMAND}logout{colours.ENDCOLOUR}' command to logout the active node.")
     print(f"Use the '{colours.COMMAND}quit{colours.ENDCOLOUR}'   command to exit the program.")
 
@@ -158,6 +183,13 @@ def node_menu():
             get_peers()
         elif command == "record":
             manage_record_pool()
+        elif command == "chord":
+            manage_chord_requests()
+            return 2
+        elif command == "sync":
+            sync_peers()
+        elif command == "clear":
+            return 2
         elif command == "logout":
             active_node = ""
             return 1
@@ -174,37 +206,38 @@ def node_menu():
 def get_chain():
     response = requests.get(f"http://{active_node}/chain")
     chain = chain_utils.get_chain_from_json(response.json()['chain'])
-    print(chain)
     client_utils.print_chain(chain)
 
 
 def get_peers():
     response = requests.get(f"http://{active_node}/discovery/peers")
-    for peer in response.json()['peers']:
-        print("--", peer)
+    if len(response.json()['peers']) == 0:
+        print_error("This node has no known peers")
+    else:
+        for peer in response.json()['peers']:
+            print(f"-- {peer}")
 
 
 def manage_record_pool():
-    print("Type 'add' to add a new record, 'list' to list records or 'cancel' to return.")
-    expecting_command = True
-    while expecting_command:
-        command = input(" > ")
+    print(f"Use the '{colours.COMMAND}add{colours.ENDCOLOUR}'    command to add a record to the record pool.")
+    print(f"Use the '{colours.COMMAND}list{colours.ENDCOLOUR}'   command to list a node's record pool.")
+    print(f"Use the '{colours.COMMAND}return{colours.ENDCOLOUR}' command to return to node menu.")
+    while True:
+        command = input(" \n>> ")
         if command == "add":
-            expecting_command = False
             add_record()
         elif command == "list":
-            expecting_command = False
             list_record()
-        elif command == "cancel":
-            expecting_command = False
+        elif command == "return":
+            return
         else:
-            print_error("Invalid command given, please try again...")
+            print_error(" Invalid command given, please try again...")
 
 
 def add_record():
-    aircraft_reg = input("\nAircraft Registration Number: ")
-    date_of_record = input("Date of Record: ")
-    filename = input("Filename: ")
+    aircraft_reg = input(" Aircraft Registration Number: ")
+    date_of_record = input(" Date of Record: ")
+    filename = input(" Filename: ")
 
     data = {
         'aircraft_reg_number': aircraft_reg,
@@ -214,16 +247,16 @@ def add_record():
     headers = {'Content-Type': "application/json"}
     response = requests.post(f"http://{active_node}/chain/record-pool", data=json.dumps(data), headers=headers)
     if response.status_code == 200:
-        print_success("Record has been added to the record pool")
+        print_success(" Record has been added to the record pool")
     else:
-        print_error("Something went wrong, please try again")
+        print_error(" Something went wrong, please try again")
 
 
 def list_record():
     response = requests.get(f"http://{active_node}/chain/record-pool")
 
     if response.json()['length'] == 0:
-        print_error("There are no records in this node's record pool")
+        print_error(" There are no records in this node's record pool")
     else:
         json_records = response.json()['records']
         records = []
@@ -237,6 +270,85 @@ def mine_block():
     response = requests.get(f"http://{active_node}/chain/mine")
     if response.status_code == 200:
         print_success(f"Block {response.json()['index']} successfully mined")
+    else:
+        print_error("Something went wrong, please try again")
+
+
+def manage_chord_requests():
+    os.system('clear')
+    print_chord_heading()
+    print(f"Use the '{colours.COMMAND}successor{colours.ENDCOLOUR}'   command to print node's successor.")
+    print(f"Use the '{colours.COMMAND}predecessor{colours.ENDCOLOUR}' command to print node's predecessor.")
+    print(f"Use the '{colours.COMMAND}lookup{colours.ENDCOLOUR}'      command to lookup a key's successor.")
+    print(f"Use the '{colours.COMMAND}file{colours.ENDCOLOUR}'        command to see if a node owns a file.")
+    print(f"Use the '{colours.COMMAND}table{colours.ENDCOLOUR}'       command to print node's finger table.")
+    print(f"Use the '{colours.COMMAND}return{colours.ENDCOLOUR}'      command to return to the node menu.")
+
+    while True:
+        command = input("\n>>> ")
+        if command == "successor":
+            chord_successor()
+        elif command == "predecessor":
+            chord_predecessor()
+        elif command == "lookup":
+            chord_lookup()
+        elif command == "file":
+            node_has_file()
+        elif command == "table":
+            chord_table()
+        elif command == "return":
+            return None
+        else:
+            print_error("Invalid command given, please try again...")
+
+def chord_predecessor():
+    response = requests.get(f"http://{active_node}/chord/predecessor")
+    if response.status_code == 200:
+        print(f"Predecessor: {response.json()['predecessor']}")
+    else:
+        print_error("Something went wrong, please try again")
+
+def chord_successor():
+    response = requests.get(f"http://{active_node}/chord/successor")
+    if response.status_code == 200:
+        print(f"Successor: {response.json()['successor']}")
+    else:
+        print_error("Something went wrong, please try again")
+
+def chord_lookup():
+    file = input("Filename: ")
+    response = requests.get(f"http://{active_node}/chord/lookup?key={chord_utils.get_hash(file)}")
+    if response.status_code == 200:
+        print(f"{response.json()['successor']}")
+    else:
+        print_error("Something went wrong, please try again")
+
+def node_has_file():
+    file = input("Filename: ")
+    response = requests.get(f"http://{active_node}/node/file?filename={file}")
+    if response.status_code == 200:
+        print_success("True")
+    else:
+        print_error("False")
+
+def chord_table():
+    response = requests.get(f"http://{active_node}/chord/finger-table")
+    if response.status_code == 200:
+        index = 1
+        finger_table = PrettyTable()
+        finger_table.field_names = ["Index", "Node_id + 2^i-1 mod 2^m", "Successor"]
+        for finger in json.loads(response.json()['finger_table']):
+            finger_table.add_row([index, finger[0], finger[1]])
+            index += 1
+        print(finger_table)
+    else:
+        print_error("Something went wrong, please try again")
+
+
+def sync_peers():
+    response = requests.get(f"http://{active_node}/chain/sync/peers")
+    if response.status_code == 200:
+        print_success("Peers successfull synced")
     else:
         print_error("Something went wrong, please try again")
 

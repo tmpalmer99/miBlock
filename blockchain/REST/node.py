@@ -227,6 +227,11 @@ def get_node_hostname():
     return json.dumps({'hostname': socket.gethostbyname(socket.gethostname())}), 200
 
 
+@app.route('/node/leave', methods=['GET'])
+def leave_network():
+    # TODO: Leave peer lists, leave chord, move files, change successor/predecessor,
+
+
 #                                                    /+=----------=+\
 # -------------------------------------------------=+|  Blockchain  |+=-------------------------------------------------
 #                                                    \+=----------=+/

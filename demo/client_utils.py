@@ -26,6 +26,7 @@ def print_chain(chain):
                 print("         |-- Date of Record:", record.date_of_record)
                 print("         +-- File hash:", record.file_hash)
                 record_count += 1
+        print("")
 
 
 def print_records(records):
