@@ -1,7 +1,6 @@
 import getopt
 import json
 import os
-import time
 import sys
 
 import requests
@@ -28,11 +27,10 @@ number_of_nodes = 0
 nodes_registered = []
 nodes_not_registered = []
 active_node = ''
-nodes = []
 
 
 def main(argv):
-    global number_of_nodes, nodes_registered, nodes
+    global number_of_nodes, nodes_registered
 
     try:
         opts, args = getopt.getopt(argv, "hn:", ["nodes="])
@@ -46,11 +44,10 @@ def main(argv):
         elif opt == "-n":
             number_of_nodes = arg
             for i in range(int(arg)):
-                if i == 0:
+                if requests.get(f"http://127.0.0.1:500{i}/node/ping").status_code == 200:
                     nodes_registered.append(f"127.0.0.1:500{i}")
                 else:
                     nodes_not_registered.append(f"127.0.0.1:500{i}")
-                nodes.append(f"127.0.0.1:500{i}")
     while True:
         if main_menu() == 1:
 
@@ -70,11 +67,14 @@ def print_logo():
     logo = logo_file.read()
     print(logo)
 
+
 def print_chord_heading():
-    logo_path = str(chain_utils.get_app_root_directory()) + "/chord_heading"
+    # logo_path = str(chain_utils.get_app_root_directory()) + "/chord_heading"
+    logo_path = str(chain_utils.get_app_root_directory()) + "/miBlock_ascii_logo"
     logo_file = open(logo_path, 'r+')
     logo = logo_file.read()
     print(logo)
+
 
 # Method used to display user errors to the user in red text
 def print_error(message):
@@ -147,9 +147,14 @@ def main_menu():
                     print_success(f"Registration was successful for node '{node}'")
             nodes_not_registered = []
         elif command == "nodes":
-            print("Available nodes: ", nodes)
-            print("Registered nodes: ", nodes_registered)
-            print("Unregistered nodes: ", nodes_not_registered)
+            print("\nRegistered nodes:")
+            print("-----------------")
+            for node in nodes_registered:
+                print(node)
+            print("\nUnregistered nodes:")
+            print("-------------------")
+            for node in nodes_not_registered:
+                print(node)
         elif command == "quit":
             return 0
         else:
@@ -162,15 +167,17 @@ def node_menu():
     print("\n")
     global active_node
     # Print list of available commands
-    print(f"Use the '{colours.COMMAND}chain{colours.ENDCOLOUR}'  command return the node's chain.")
-    print(f"Use the '{colours.COMMAND}mine{colours.ENDCOLOUR}'   command to mine a block of unverified records.")
-    print(f"Use the '{colours.COMMAND}peers{colours.ENDCOLOUR}'  command return the node's known peers.")
-    print(f"Use the '{colours.COMMAND}record{colours.ENDCOLOUR}' command to manage a nodes record pool.")
-    print(f"Use the '{colours.COMMAND}chord{colours.ENDCOLOUR}'  command to manage a nodes chord instance.")
-    print(f"Use the '{colours.COMMAND}sync{colours.ENDCOLOUR}'   command to sync a node's peers.")
-    print(f"Use the '{colours.COMMAND}clear{colours.ENDCOLOUR}'  command to clear the console.")
-    print(f"Use the '{colours.COMMAND}logout{colours.ENDCOLOUR}' command to logout the active node.")
-    print(f"Use the '{colours.COMMAND}quit{colours.ENDCOLOUR}'   command to exit the program.")
+    print(f"Use the '{colours.COMMAND}chain{colours.ENDCOLOUR}'     command return the node's chain.")
+    print(f"Use the '{colours.COMMAND}mine{colours.ENDCOLOUR}'      command to mine a block of unverified records.")
+    print(f"Use the '{colours.COMMAND}peers{colours.ENDCOLOUR}'     command return the node's known peers.")
+    print(f"Use the '{colours.COMMAND}record{colours.ENDCOLOUR}'    command to manage a nodes record pool.")
+    print(f"Use the '{colours.COMMAND}chord{colours.ENDCOLOUR}'     command to manage a nodes chord instance.")
+    print(f"Use the '{colours.COMMAND}sync{colours.ENDCOLOUR}'      command to sync a node's peers.")
+    print(f"Use the '{colours.COMMAND}consensus{colours.ENDCOLOUR}' command to achieve chain consensus for a node.")
+    print(f"Use the '{colours.COMMAND}clear{colours.ENDCOLOUR}'     command to clear the console.")
+    print(f"Use the '{colours.COMMAND}leave{colours.ENDCOLOUR}'     command for node to leave the network.")
+    print(f"Use the '{colours.COMMAND}logout{colours.ENDCOLOUR}'    command to logout the active node.")
+    print(f"Use the '{colours.COMMAND}quit{colours.ENDCOLOUR}'      command to exit the program.")
 
     # Continuously prompts user for commands until the application state changes
     while True:
@@ -188,8 +195,17 @@ def node_menu():
             return 2
         elif command == "sync":
             sync_peers()
+        elif command == "consensus":
+            chain_consensus()
         elif command == "clear":
             return 2
+        elif command == "leave":
+            leave_status = leave_network()
+            if leave_status == 200:
+                active_node = ""
+                return 1
+            else:
+                print_error(" Something went wrong, please try again")
         elif command == "logout":
             active_node = ""
             return 1
@@ -277,17 +293,22 @@ def mine_block():
 def manage_chord_requests():
     os.system('clear')
     print_chord_heading()
-    print(f"Use the '{colours.COMMAND}successor{colours.ENDCOLOUR}'   command to print node's successor.")
-    print(f"Use the '{colours.COMMAND}predecessor{colours.ENDCOLOUR}' command to print node's predecessor.")
-    print(f"Use the '{colours.COMMAND}lookup{colours.ENDCOLOUR}'      command to lookup a key's successor.")
-    print(f"Use the '{colours.COMMAND}file{colours.ENDCOLOUR}'        command to see if a node owns a file.")
-    print(f"Use the '{colours.COMMAND}table{colours.ENDCOLOUR}'       command to print node's finger table.")
-    print(f"Use the '{colours.COMMAND}return{colours.ENDCOLOUR}'      command to return to the node menu.")
+    print(f"Use the '{colours.COMMAND}successor{colours.ENDCOLOUR}'      command to print node's successor.")
+    print(f"Use the '{colours.COMMAND}successor-list{colours.ENDCOLOUR}' command to print node's successor list.")
+    print(f"Use the '{colours.COMMAND}predecessor{colours.ENDCOLOUR}'    command to print node's predecessor.")
+    print(f"Use the '{colours.COMMAND}lookup{colours.ENDCOLOUR}'         command to lookup a key's successor.")
+    print(f"Use the '{colours.COMMAND}file{colours.ENDCOLOUR}'           command to see if a node owns a file.")
+    print(f"Use the '{colours.COMMAND}table{colours.ENDCOLOUR}'          command to print node's finger table.")
+    print(f"Use the '{colours.COMMAND}files{colours.ENDCOLOUR}'          command to print node's stored files.")
+    print(f"Use the '{colours.COMMAND}nodes{colours.ENDCOLOUR}'          command to print all node id's.")
+    print(f"Use the '{colours.COMMAND}return{colours.ENDCOLOUR}'         command to return to the node menu.")
 
     while True:
         command = input("\n>>> ")
         if command == "successor":
             chord_successor()
+        elif command == "successor-list":
+            chord_successor_list()
         elif command == "predecessor":
             chord_predecessor()
         elif command == "lookup":
@@ -296,10 +317,15 @@ def manage_chord_requests():
             node_has_file()
         elif command == "table":
             chord_table()
+        elif command == "files":
+            print_stored_files()
+        elif command == "nodes":
+            chord_nodes()
         elif command == "return":
             return None
         else:
             print_error("Invalid command given, please try again...")
+
 
 def chord_predecessor():
     response = requests.get(f"http://{active_node}/chord/predecessor")
@@ -308,12 +334,22 @@ def chord_predecessor():
     else:
         print_error("Something went wrong, please try again")
 
+
 def chord_successor():
     response = requests.get(f"http://{active_node}/chord/successor")
     if response.status_code == 200:
         print(f"Successor: {response.json()['successor']}")
     else:
         print_error("Something went wrong, please try again")
+
+
+def chord_successor_list():
+    response = requests.get(f"http://{active_node}/chord/successor-list")
+    if response.status_code == 200:
+        print(f"Successor: {response.json()['successor-list']}")
+    else:
+        print_error("Something went wrong, please try again")
+
 
 def chord_lookup():
     file = input("Filename: ")
@@ -323,6 +359,7 @@ def chord_lookup():
     else:
         print_error("Something went wrong, please try again")
 
+
 def node_has_file():
     file = input("Filename: ")
     response = requests.get(f"http://{active_node}/node/file?filename={file}")
@@ -330,6 +367,7 @@ def node_has_file():
         print_success("True")
     else:
         print_error("False")
+
 
 def chord_table():
     response = requests.get(f"http://{active_node}/chord/finger-table")
@@ -345,12 +383,46 @@ def chord_table():
         print_error("Something went wrong, please try again")
 
 
+def print_stored_files():
+    response = requests.get(f"http://{active_node}/chord/files")
+    if response.status_code == 200:
+        files = response.json()['files']
+        if len(files) == 0:
+            print_error("This node has no files stored")
+        else:
+            for file in files:
+                print(file)
+    else:
+        print_error("Something went wrong, please try again")
+
+
+def chord_nodes():
+    response = requests.get(f"http://127.0.0.1:5000/discovery/peers")
+    print(f"Node - 172.17.0.1:5000 @ '{chord_utils.get_hash('172.17.0.1:5000')}'")
+    for peer in response.json()['peers']:
+        print(f"Node - {peer} @ '{chord_utils.get_hash(peer)}'")
+
+
 def sync_peers():
     response = requests.get(f"http://{active_node}/chain/sync/peers")
     if response.status_code == 200:
         print_success("Peers successfull synced")
     else:
         print_error("Something went wrong, please try again")
+
+
+def chain_consensus():
+    response = requests.get(f"http://{active_node}/chain/sync/chain")
+    if response.status_code == 200:
+        print_success("Chain consensus achieved")
+    else:
+        print_error("Something went wrong, please try again")
+
+def leave_network():
+    response = requests.get(f"http://{active_node}/node/leave")
+    nodes_not_registered.append(active_node)
+    nodes_registered.remove(active_node)
+    return response.status_code
 
 
 if __name__ == '__main__':
