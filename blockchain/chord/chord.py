@@ -45,7 +45,7 @@ class Chord:
                 chord_utils.get_hash(self.successor) < self.node_id < key or \
                 key < chord_utils.get_hash(self.successor) < self.node_id:
             # Return successor's address
-            logger.info(f"[{self.node_address}]: Successor of 'key' is '{self.successor}'")
+            logger.info(f"[{self.node_address}]: Successor of '{key}' is '{self.successor}'")
             return self.successor
         else:
             # Find the closest preceding node to the key

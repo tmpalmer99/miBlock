@@ -69,8 +69,7 @@ def print_logo():
 
 
 def print_chord_heading():
-    # logo_path = str(chain_utils.get_app_root_directory()) + "/chord_heading"
-    logo_path = str(chain_utils.get_app_root_directory()) + "/miBlock_ascii_logo"
+    logo_path = str(chain_utils.get_app_root_directory()) + "/chord_heading"
     logo_file = open(logo_path, 'r+')
     logo = logo_file.read()
     print(logo)
@@ -283,6 +282,7 @@ def list_record():
 
 
 def mine_block():
+    chain_consensus()
     response = requests.get(f"http://{active_node}/chain/mine")
     if response.status_code == 200:
         print_success(f"Block {response.json()['index']} successfully mined")
@@ -406,7 +406,7 @@ def chord_nodes():
 def sync_peers():
     response = requests.get(f"http://{active_node}/chain/sync/peers")
     if response.status_code == 200:
-        print_success("Peers successfull synced")
+        print_success("Peers successfully synced")
     else:
         print_error("Something went wrong, please try again")
 

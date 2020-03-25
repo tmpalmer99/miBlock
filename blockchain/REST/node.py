@@ -88,11 +88,11 @@ def ping():
 @app.route('/node/record', methods=['POST'])
 def receive_file():
     # Filename and checksum are required in the request
-    if 'file_name' not in request.get_json() or 'checksum' not in request.get_json():
+    if 'filename' not in request.get_json() or 'checksum' not in request.get_json():
         return 'File name was not provided', 400
 
     # Store request data in variables
-    filename = request.get_json()['file_name']
+    filename = request.get_json()['filename']
     received_checksum = request.get_json()['checksum']
 
     logger.info(f"Setting up server connection")
@@ -105,7 +105,7 @@ def receive_file():
 
     # Wrap socket with ssl context and accept incoming connection
     conn, addr = sock.accept()
-    logger.info(f"Made connection with address '{addr}', receiving file with filename '{filename}'")
+    logger.info(f"Made connection with address '{addr[0]}:{addr[1]}', receiving file with filename '{filename}'")
 
     # Create file in record storage directory
     storage_path = block_utils.path_to_record_storage()
@@ -129,10 +129,12 @@ def receive_file():
 
     # Check file exists in file storage
     if not os.path.exists(file_path):
+        logger.info("File path does not exist")
         return "Record was not transferred correctly", 400
 
     # Validate file checksums to ensure file integrity is maintained
     if block_utils.get_checksum_of_file(file_path) != received_checksum:
+        logger.info("Checksums didn't match")
         return "Checksums don't match", 400
 
     logger.info(f"New file has been stored, checksums match")
@@ -240,7 +242,6 @@ def get_node_hostname():
 @app.route('/node/leave', methods=['GET'])
 def leave_network():
     global online
-    online = False
     broadcast_peer_sync(broadcast=True)
 
     moved_files, files_to_move = 0, 0
@@ -249,10 +250,12 @@ def leave_network():
         files_to_move = len(chord.stored_files)
         for file in chord.stored_files:
             if file_transfer_handler(chord.successor, file):
-                chord.stored_files.remove(file)
                 moved_files += 1
+        chord.stored_files = []
 
     response = requests.get(f"http://{chord.predecessor}/chord/stabalise")
+
+    online = False
     broadcast_chord_update(peers)
     broadcast_peer_sync(broadcast=True)
     if response.status_code == 200:
@@ -667,7 +670,7 @@ def initialise_receiving_peer(successor_node, filename):
 
     # Generate data and headers
     data = json.dumps({
-        'file_name': filename,
+        'filename': filename,
         'checksum': block_utils.get_checksum_of_file(file_path)
     })
     headers = {'Content-Type': "application/json"}
@@ -679,17 +682,16 @@ def initialise_receiving_peer(successor_node, filename):
     return response.content, response.status_code
 
 
-def file_transfer_handler(file_successor, file, stored=True):
+def file_transfer_handler(file_successor, filename, stored=True):
     if file_successor != node_address:
-        file_path = ""
         if stored:
             # Record already verified
-            block_utils.stored_maintenance_record_exists(file)
-            file_path = block_utils.path_to_stored_record(file)
+            block_utils.stored_maintenance_record_exists(filename)
+            file_path = block_utils.path_to_stored_record(filename)
         elif not stored:
             # Record not verified
-            block_utils.unused_maintenance_record_exists(file)
-            file_path = block_utils.path_to_stored_record(file)
+            block_utils.unused_maintenance_record_exists(filename)
+            file_path = block_utils.path_to_unused_record(filename)
         else:
             return "File doesn't exist", 400
 
@@ -699,7 +701,7 @@ def file_transfer_handler(file_successor, file, stored=True):
         logger.info(f"Received file successors hostname '{successor_hostname}'")
 
         # Creating threads to setup server peer and client peer
-        t1 = threading.Thread(target=initialise_receiving_peer, args=(file_successor, file))
+        t1 = threading.Thread(target=initialise_receiving_peer, args=(file_successor, filename))
         t2 = threading.Thread(target=send_file_to_peer, args=(successor_hostname, file_path))
 
         # Start threads
@@ -713,7 +715,7 @@ def file_transfer_handler(file_successor, file, stored=True):
         t1.join()
         t2.join()
 
-    response = requests.get(f"http://{file_successor}/node/file?filename={file}")
+    response = requests.get(f"http://{file_successor}/node/file?filename={filename}")
     return response.status_code == 200
 
 
@@ -725,8 +727,7 @@ def broadcast_peer_sync(broadcast=False):
         else:
             response = requests.get(f"http://{peer}/discovery/peers")
             for response_peer in response.json()['peers']:
-                if response_peer not in peers and response_peer != node_address and \
-                        requests.get(f"http://{response_peer}/node/ping").status_code == 200:
+                if response_peer not in peers and response_peer != node_address:
                     peers.append(response_peer)
 
     if broadcast:
@@ -771,6 +772,7 @@ def join_chord_network():
     global chord, online
     # Initialising chord node
     chord = Chord(node_address)
+    online = True
 
     # Notify node's successor of our existence
     logger.info("Notifying our successor")
@@ -793,7 +795,6 @@ def join_chord_network():
     response = requests.get(f"http://{chord.successor}/chord/sync/files")
     if response.status_code != 200:
         return response.reason
-    online = True
     return 0
 
 
