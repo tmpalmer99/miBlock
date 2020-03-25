@@ -1,9 +1,34 @@
 import json
 import os
+import logging
 
 from pathlib import Path
 from blockchain import block_utils
 from json.decoder import JSONDecodeError
+
+
+def init_logger(name):
+    """
+    Utility function to initialise a logger, prevents duplicate code in multiple files
+    :param name: Name of logger
+    :return:     Logger
+    """
+    # Create logger and set logging level
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+
+    # Create log file
+    logfile = str(get_app_root_directory()) + "/blockchain/logs/node.log"
+    handler = logging.FileHandler(logfile)
+
+    # Create logging format
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+
+    # Add logger handler
+    logger.addHandler(handler)
+
+    return logger
 
 
 def is_record_verified(record_filename):

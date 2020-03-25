@@ -1,5 +1,8 @@
 from blockchain import chain_utils
 
+# Create logger
+logger = chain_utils.init_logger("Record Pool")
+
 
 class RecordPool:
 
@@ -44,5 +47,5 @@ class RecordPool:
         for verified_record in records:
             for unverified_record in self.unverified_records:
                 if unverified_record.aircraft_reg_number == verified_record.aircraft_reg_number and \
-                    unverified_record.filename == verified_record.filename:
+                   unverified_record.filename == verified_record.filename:
                     self.unverified_records.remove(unverified_record)

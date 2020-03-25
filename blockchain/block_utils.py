@@ -1,3 +1,7 @@
+import hashlib
+import os
+
+from blockchain import chain_utils
 from blockchain.block import Block
 from blockchain.maintenance_record import MaintenanceRecord
 
@@ -18,7 +22,7 @@ def get_block_object_from_dict(block_dict):
 
     records = []
     for record_dict in block_dict["records"]:
-        record = get_record_object_from_dict(record_dict)
+        record = get_record_object_from_dict(record_dict, False)
         records.append(record)
 
     block = Block(index, previous_hash, timestamp, records, nonce)
@@ -28,16 +32,22 @@ def get_block_object_from_dict(block_dict):
     return None
 
 
-def get_record_object_from_dict(record_dict):
+def get_record_object_from_dict(record_dict, stored):
     """
     Converts a record in dictionary format to object form
+    :param stored:      Determines which directory
     :param record_dict: Record in dictionary format
     :return:            Record in MaintenanceRecord type
     """
+    if stored:
+        file_path = path_to_stored_record(record_dict['filename'])
+    else:
+        file_path = path_to_unused_record(record_dict['filename'])
+
     return MaintenanceRecord(record_dict['aircraft_reg_number'],
                              record_dict['date_of_record'],
                              record_dict['filename'],
-                             record_dict['file_path'])
+                             file_path)
 
 
 def get_block_dict_from_object(block):
@@ -48,7 +58,13 @@ def get_block_dict_from_object(block):
     """
     formatted_records = []
     for record in block.records:
-        formatted_records.append(record.__dict__)
+        record_data = {
+            'aircraft_reg_number': record.aircraft_reg_number,
+            'date_of_record': record.date_of_record,
+            'filename': record.filename,
+            'file_hash': record.file_hash
+        }
+        formatted_records.append(record_data)
 
     block_dict = {
         'index': block.index,
@@ -74,3 +90,65 @@ def is_record_valid(record):
     if not str(record.file_path).split("/")[-1] == record.filename:
         return False
     return True
+
+
+def unused_maintenance_record_exists(filename):
+    file_path = str(chain_utils.get_app_root_directory()) + f"/data/records/unused/{filename}"
+    return os.path.exists(file_path)
+
+
+def stored_maintenance_record_exists(filename):
+    file_path = str(chain_utils.get_app_root_directory()) + f"/data/records/used/{filename}"
+    return os.path.exists(file_path)
+
+
+def path_to_unused_record(filename):
+    if unused_maintenance_record_exists(filename):
+        return str(chain_utils.get_app_root_directory()) + f"/data/records/unused/{filename}"
+    return None
+
+
+def path_to_stored_record(filename):
+    if unused_maintenance_record_exists(filename):
+        return str(chain_utils.get_app_root_directory()) + f"/data/records/used/{filename}"
+    return None
+
+
+def path_to_record_storage():
+    path = str(chain_utils.get_app_root_directory()) + "/data/records/used"
+    if os.path.exists(path):
+        return path
+    else:
+        return None
+
+
+def move_record_file(filename):
+    write_file = open(path_to_record_storage() + "/" + filename, 'wb')
+    with open(path_to_unused_record(filename), 'rb') as read_file:
+        while True:
+            data = read_file.read(1024)
+            if not data:
+                break
+            write_file.write(data)
+
+
+def get_checksum_of_file(file_path):
+    # MD5 checksum
+    md5_hash = hashlib.md5()
+
+    # Open file as file
+    with open(file_path, 'rb') as file:
+        while True:
+            # Read 1024 bytes
+            data = file.read(1024)
+
+            # Reached end of file, no more data to read
+            if not data:
+                break
+
+            # Update hash with new data
+            md5_hash.update(data)
+        # Close file when finished
+        file.close()
+
+    return md5_hash.hexdigest()

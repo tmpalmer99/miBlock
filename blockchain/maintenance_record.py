@@ -13,9 +13,7 @@ class MaintenanceRecord:
         self.date_of_record = date_of_record
         self.filename = filename
         self.file_path = file_path
-        # TODO: Need to wait for chord implementation before hashes can be computed, Some computers wont store the file
-        #       so can't get it's record, Need a get file hash from node with file method to check hashes
-        # self.file_hash = self.get_file_hash()
+        self.file_hash = self.get_file_hash()
 
     def get_file_hash(self):
         """
