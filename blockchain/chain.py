@@ -157,3 +157,14 @@ class Blockchain:
                     return False
             previous_hash = block.get_block_hash()
         return True
+
+
+    def is_record_valid(self, file_hash, filename):
+        previous_hash = ""
+        for block in self.chain:
+            for record in block.records:
+                if record.filename == filename and file_hash == record.file_hash:
+                    if block.previous_hash == previous_hash and self.is_block_hash_valid(block):
+                        return True
+            previous_hash = block.get_block_hash()
+        return False
