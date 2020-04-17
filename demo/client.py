@@ -2,6 +2,7 @@ import getopt
 import json
 import os
 import sys
+import math
 
 import requests
 from prettytable import PrettyTable
@@ -388,8 +389,9 @@ def chord_table():
         index = 1
         finger_table = PrettyTable()
         finger_table.field_names = ["Index", "Node_id + 2^i-1 mod 2^m", "Successor"]
-        for finger in json.loads(response.json()['finger_table']):
-            finger_table.add_row([index, finger[0], finger[1]])
+        for successor in json.loads(response.json()['finger_table']):
+            finger_id = (chord_utils.get_hash("172.17.0.1:" + active_node.split(":")[1]) + math.pow(2, index-1)) % math.pow(2, 10)
+            finger_table.add_row([index, finger_id, successor])
             index += 1
         print(finger_table)
     else:

@@ -16,7 +16,7 @@ from blockchain.maintenance_record import MaintenanceRecord
 app = Flask(__name__)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', threaded=True)
 
 # Create logger
 logger = chain_utils.init_logger("Node ")
@@ -622,7 +622,8 @@ def peer_chain_consensus():
     # Request chain from each peer
     for peer in peers:
         if requests.get(f"http://{peer}/node/ping").status_code == 400:
-            peers.remove(peer)
+            if peer in peers:
+                peers.remove(peer)
         else:
             headers = {'Content-Type': "application/json"}
             response = requests.get(f"http://{peer}/chain", headers=headers)

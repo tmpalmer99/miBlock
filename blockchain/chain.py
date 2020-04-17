@@ -107,6 +107,9 @@ class Blockchain:
         :return: The index of the new block
         """
         logger.info("Mining new block")
+        for block in self.chain:
+            self.record_pool.remove_records(block.records)
+
         records = self.record_pool.get_unverified_records()
         last_block = self.last_block_on_chain()
 
