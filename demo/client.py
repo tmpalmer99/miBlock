@@ -2,6 +2,7 @@ import getopt
 import json
 import os
 import sys
+import math
 
 import requests
 from prettytable import PrettyTable
@@ -173,6 +174,7 @@ def node_menu():
     print(f"Use the '{colours.COMMAND}chord{colours.ENDCOLOUR}'     command to manage a nodes chord instance.")
     print(f"Use the '{colours.COMMAND}sync{colours.ENDCOLOUR}'      command to sync a node's peers.")
     print(f"Use the '{colours.COMMAND}consensus{colours.ENDCOLOUR}' command to achieve chain consensus for a node.")
+    print(f"Use the '{colours.COMMAND}verify{colours.ENDCOLOUR}'    command to verify a record has not been tampered with.")
     print(f"Use the '{colours.COMMAND}clear{colours.ENDCOLOUR}'     command to clear the console.")
     print(f"Use the '{colours.COMMAND}leave{colours.ENDCOLOUR}'     command for node to leave the network.")
     print(f"Use the '{colours.COMMAND}logout{colours.ENDCOLOUR}'    command to logout the active node.")
@@ -196,6 +198,8 @@ def node_menu():
             sync_peers()
         elif command == "consensus":
             chain_consensus()
+        elif command == "verify":
+            verify_record()
         elif command == "clear":
             return 2
         elif command == "leave":
@@ -290,6 +294,16 @@ def mine_block():
         print_error("Something went wrong, please try again")
 
 
+def verify_record():
+    filename = input(" Filename: ")
+    response = requests.get(f"http://{active_node}/chain/verify-record?filename={filename}")
+    if response.status_code == 200:
+        print_success("This file is successfully verified and can be submitted as evidence in a court of law")
+    elif response.status_code == 404:
+        print_error("File does not exists")
+    else:
+        print_error("This file has been tampered with")
+
 def manage_chord_requests():
     os.system('clear')
     print_chord_heading()
@@ -375,8 +389,9 @@ def chord_table():
         index = 1
         finger_table = PrettyTable()
         finger_table.field_names = ["Index", "Node_id + 2^i-1 mod 2^m", "Successor"]
-        for finger in json.loads(response.json()['finger_table']):
-            finger_table.add_row([index, finger[0], finger[1]])
+        for successor in json.loads(response.json()['finger_table']):
+            finger_id = (chord_utils.get_hash("172.17.0.1:" + active_node.split(":")[1]) + math.pow(2, index-1)) % math.pow(2, 10)
+            finger_table.add_row([index, finger_id, successor])
             index += 1
         print(finger_table)
     else:

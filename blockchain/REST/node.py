@@ -11,11 +11,12 @@ from blockchain import chain_utils, block_utils
 from blockchain.chain import Blockchain
 from blockchain.chord import chord_utils
 from blockchain.chord.chord import Chord
+from blockchain.maintenance_record import MaintenanceRecord
 
 app = Flask(__name__)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', threaded=True)
 
 # Create logger
 logger = chain_utils.init_logger("Node ")
@@ -395,6 +396,30 @@ def add_block():
         return "There was an error when adding block", 400
 
 
+# -----------------------------------------------------------\
+# A method for verifying a record has not been tampered with |
+# -----------------------------------------------------------/
+@app.route('/chain/verify-record', methods=['GET'])
+def verify_record():
+    if "filename" not in request.args:
+        return 'No filename specified', 401
+
+    # Locate record file in network
+    filename = request.args['filename']
+    logger.info(f"Node was asked check the validity of record '{filename}'")
+    file_successor = chord_utils.find_successor(node_address, chord_utils.get_hash(filename))
+    response = requests.get(f"http://{file_successor}/chord/record?filename={filename}")
+
+    if response.status_code == 200:
+        file_hash = response.json()["file_hash"]
+        logger.info(f"hash of '{filename}' is '{file_hash}'")
+        if blockchain.is_record_valid(file_hash, filename):
+            return "File is valid", 200
+        else:
+            return "file is not valid", 400
+    else:
+        return "File not found", 404
+
 # ------------------------------------------------[Chain Synchronisation]-----------------------------------------------
 
 # -----------------------------------------------\
@@ -573,6 +598,19 @@ def get_stored_files():
     return json.dumps({'files': chord.stored_files}), 200
 
 
+# -------------------------------------------------\
+#       Ask chord node to retrieve file hash       |
+# -------------------------------------------------/
+@app.route('/chord/record', methods=['GET'])
+def get_file_hash():
+    logger.info("Node was asked to return a file's hash")
+    if "filename" not in request.args:
+        return 'No filename specified', 400
+    filename = str(request.args["filename"])
+    file_path = block_utils.path_to_stored_record(filename)
+    record = MaintenanceRecord("temp", "temp", filename, file_path)
+    return json.dumps({"file_hash":record.file_hash}), 200
+
 #                                                 /+=-------------------=+\
 # ----------------------------------------------=+|  Broadcast Functions  |+=-------------------------------------------
 #                                                 \+=-------------------=+/
@@ -584,7 +622,8 @@ def peer_chain_consensus():
     # Request chain from each peer
     for peer in peers:
         if requests.get(f"http://{peer}/node/ping").status_code == 400:
-            peers.remove(peer)
+            if peer in peers:
+                peers.remove(peer)
         else:
             headers = {'Content-Type': "application/json"}
             response = requests.get(f"http://{peer}/chain", headers=headers)

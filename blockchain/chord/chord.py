@@ -17,7 +17,7 @@ class Chord:
     predecessor = None
     node_address = None
     identifier_length = 10
-    finger_table = [[None, None] for i in range(identifier_length)]
+    finger_table = [""] * identifier_length
 
     def __init__(self, ip_address):
         # Set node address and ID information
@@ -29,8 +29,7 @@ class Chord:
         # Discovery node creates Chord ring
         if self.node_address == '172.17.0.1:5000':
             for i in range(self.identifier_length):
-                chord_id = (self.node_id + math.pow(2, i)) % math.pow(2, self.identifier_length)
-                self.finger_table[i] = [chord_id, str(self.node_address)]
+                self.finger_table[i] = str(self.node_address)
             self.successor = self.node_address
         else:
             # Ask discovery node to find node's successor
@@ -64,12 +63,12 @@ class Chord:
         key = float(key)
         # Iterate backwards through finger table to find preceding node to key
         for i in range(self.identifier_length - 1, -1, -1):
-            if self.finger_table[i][1] is not None:
-                if self.node_id < chord_utils.get_hash(self.finger_table[i][1]) <= key or \
-                        key <= self.node_id < chord_utils.get_hash(self.finger_table[i][1]):
-                    if key != self.finger_table[i][1]:
-                        if requests.get(f"http://{self.finger_table[i][1]}/node/ping").status_code == 200:
-                            return self.finger_table[i][1]
+            if self.finger_table[i] is not "":
+                if self.node_id < chord_utils.get_hash(self.finger_table[i]) <= key or \
+                        key <= self.node_id < chord_utils.get_hash(self.finger_table[i]):
+                    if key != self.finger_table[i]:
+                        if requests.get(f"http://{self.finger_table[i]}/node/ping").status_code == 200:
+                            return self.finger_table[i]
         return self.successor
 
     def fix_fingers(self):
@@ -79,7 +78,7 @@ class Chord:
             finger_id = (self.node_id + math.pow(2, index)) % math.pow(2, self.identifier_length)
             key_successor = self.find_successor(finger_id)
 
-            self.finger_table[index] = [finger_id, key_successor]
+            self.finger_table[index] = key_successor
 
     def stabalise(self):
         logger.info(f"[{self.node_address}]: Stabilising...")
