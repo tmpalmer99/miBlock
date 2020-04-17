@@ -528,6 +528,7 @@ def notify():
             # We have no predecessor, set our predecessor as the potential predecessor
             logger.info(f"Node has new predecessor '{potential_predecessor}'")
             chord.predecessor = potential_predecessor
+            chord_utils.stabalise_node(node_address)
         elif requests.get(f"http://{chord.predecessor}/node/ping").status_code == 400:
             chord.predecessor = potential_predecessor
         elif chord_utils.get_hash(chord.predecessor) < potential_predecessor_hash < chord.node_id or \
@@ -816,10 +817,6 @@ def join_chord_network():
     # Notify node's successor of our existence
     logger.info("Notifying our successor")
     chord_utils.notify_successor(chord.successor, chord.node_address)
-
-    # Tell successor to stabalise
-    logger.info("Stabalising our successor")
-    chord_utils.stabalise_node(chord.successor)
 
     # Predecessor and successor points are correct, fix finger tables of effected nodes
     logger.info("Fixing our finger table")
