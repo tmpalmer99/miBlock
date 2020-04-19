@@ -1,8 +1,8 @@
 import getopt
 import json
+import math
 import os
 import sys
-import math
 
 import requests
 from prettytable import PrettyTable
@@ -45,10 +45,10 @@ def main(argv):
         elif opt == "-n":
             number_of_nodes = arg
             for i in range(int(arg)):
-                if requests.get(f"http://127.0.0.1:500{i}/node/ping").status_code == 200:
-                    nodes_registered.append(f"127.0.0.1:500{i}")
+                if requests.get(f"http://127.0.0.1:50{i}/node/ping").status_code == 200:
+                    nodes_registered.append(f"127.0.0.1:50{i}")
                 else:
-                    nodes_not_registered.append(f"127.0.0.1:500{i}")
+                    nodes_not_registered.append(f"127.0.0.1:50{i}")
     while True:
         if main_menu() == 1:
 
@@ -63,14 +63,14 @@ def main(argv):
 
 
 def print_logo():
-    logo_path = str(chain_utils.get_app_root_directory()) + "/miBlock_ascii_logo"
+    logo_path = str(chain_utils.get_app_root_directory()) + "/demo/images/miBlock_ascii_logo"
     logo_file = open(logo_path, 'r+')
     logo = logo_file.read()
     print(logo)
 
 
 def print_chord_heading():
-    logo_path = str(chain_utils.get_app_root_directory()) + "/chord_heading"
+    logo_path = str(chain_utils.get_app_root_directory()) + "/demo/images/chord_heading"
     logo_file = open(logo_path, 'r+')
     logo = logo_file.read()
     print(logo)
@@ -424,8 +424,8 @@ def print_stored_files():
 
 
 def chord_nodes():
-    response = requests.get(f"http://127.0.0.1:5000/discovery/peers")
-    print(f"Node - 172.17.0.1:5000 @ '{chord_utils.get_hash('172.17.0.1:5000')}'")
+    response = requests.get(f"http://127.0.0.1:500/discovery/peers")
+    print(f"Node - 172.17.0.1:500 @ '{chord_utils.get_hash('172.17.0.1:500')}'")
     for peer in response.json()['peers']:
         print(f"Node - {peer} @ '{chord_utils.get_hash(peer)}'")
 

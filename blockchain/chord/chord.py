@@ -1,7 +1,5 @@
 import math
 
-import requests
-
 from blockchain import chain_utils
 from blockchain.chord import chord_utils
 
@@ -26,13 +24,13 @@ class Chord:
         logger.info(f"[{self.node_address}]: Initialising Chord node '{ip_address}'")
 
         # Discovery node creates Chord ring
-        if self.node_address == '172.17.0.1:5000':
+        if self.node_address == '172.17.0.1:500':
             for i in range(self.identifier_length):
                 self.finger_table[i] = str(self.node_address)
             self.successor = self.node_address
         else:
             # Ask discovery node to find node's successor
-            self.successor = chord_utils.find_successor('172.17.0.1:5000', self.node_id)
+            self.successor = chord_utils.find_successor('172.17.0.1:500', self.node_id)
             logger.info(f"[{self.node_address}]: Found successor '{self.successor}'")
             logger.info(f"[{self.node_address}]: Notifying '{self.successor}' of our existence")
 
@@ -88,7 +86,8 @@ class Chord:
             # Verify our successor's predecessor is correct
             successors_predecessor = chord_utils.get_predecessor(self.successor)
             if self.node_id < chord_utils.get_hash(successors_predecessor) < chord_utils.get_hash(self.successor) or \
-                    chord_utils.get_hash(self.successor) < self.node_id < chord_utils.get_hash(successors_predecessor):
+                    chord_utils.get_hash(self.successor) < self.node_id < chord_utils.get_hash(successors_predecessor) or \
+                    chord_utils.get_hash(successors_predecessor) < chord_utils.get_hash(self.successor) < self.node_id:
                 # Update our successor, it is incorrect
                 self.successor = successors_predecessor
                 logger.info(f"[{self.node_address}]: Found new successor '{self.successor}'")

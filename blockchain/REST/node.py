@@ -25,7 +25,7 @@ logger = chain_utils.init_logger("Node ")
 peers = []
 
 # Address of discovery node
-discovery_node_address = '172.17.0.1:5000'
+discovery_node_address = '172.17.0.1:500'
 
 # Address of node
 node_address = ''
@@ -226,7 +226,7 @@ def register_node():
         peers.append(response_peer)
 
     # Join the Chord network
-    response = join_chord_network()
+    response = join_chord_network(node_address)
     if response != 0:
         return response, 400
 
@@ -516,7 +516,8 @@ def notify():
             chord.predecessor = potential_predecessor
             chord_utils.stabalise_node(node_address)
         elif chord_utils.get_hash(chord.predecessor) < potential_predecessor_hash < chord.node_id or \
-                chord.node_id < chord_utils.get_hash(chord.predecessor) < potential_predecessor_hash:
+                chord.node_id < chord_utils.get_hash(chord.predecessor) < potential_predecessor_hash or \
+                potential_predecessor_hash < chord.node_id < chord_utils.get_hash(chord.predecessor):
             logger.info(f"Node has new predecessor '{potential_predecessor}'")
             old_predecessor = chord.predecessor
             chord.predecessor = potential_predecessor
@@ -781,10 +782,10 @@ def generate_block_from_request(block_json):
 
 
 # Allows a node to join the chord network
-def join_chord_network():
+def join_chord_network(address):
     global chord
     # Initialising chord node
-    chord = Chord(node_address)
+    chord = Chord(address)
 
     # Notify node's successor of our existence
     logger.info("Notifying our successor")
