@@ -13,6 +13,9 @@ class RecordPool:
         """
         :param record: Record to be added to the pool of unverified records
         """
+        for added_record in self.unverified_records:
+            if added_record.filename == record.filename:
+                return None
         self.unverified_records.append(record)
 
     def get_unverified_records(self):
