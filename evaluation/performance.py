@@ -29,6 +29,9 @@ number_of_records = 0
 nodes_registered = []
 nodes_not_registered = []
 active_node = ''
+all_records = []
+records_on_network = []
+timings = dict()
 
 
 def print_logo():
@@ -50,14 +53,9 @@ def register_nodes():
 
 
 def get_required_records():
+    global all_records
     path = str(chain_utils.get_app_root_directory()) + "/data/records/unused"
-    all_record_files = [f for f in listdir(path) if isfile(join(path, f))]
-    records = []
-    i = 0
-    while i < number_of_records:
-        records.append(all_record_files[i])
-        i += 1
-    return records
+    all_records = [f for f in listdir(path) if isfile(join(path, f))][0:300]
 
 
 def add_records(records):
@@ -73,9 +71,11 @@ def add_records(records):
         response = requests.post(f"http://127.0.0.1:500/chain/record-pool", data=json.dumps(data), headers=headers)
         if response.status_code == 200:
             successor = requests.get(f"http://127.0.0.1:500/chord/lookup?key={chord_utils.get_hash(record)}").json()['successor']
-            print_success(f"Record {i}:{record} has been added to the record pool @ {successor} - {chord_utils.get_hash(record)}")
+            # print_success(f"Record {i}:{record} has been added to the record pool @ {successor} - {chord_utils.get_hash(record)}")
+            records_on_network.append(record)
+            all_records.remove(record)
         i += 1
-    who_has_records()
+    # who_has_records()
 
 
 def who_has_records():
@@ -127,21 +127,11 @@ def main(argv):
     os.system('clear')
     print_logo()
     register_nodes()
-    time.sleep(10)
-    number_of_records = int(input("\nRecords: "))
-    print(f"\nNumber of nodes = {number_of_nodes}")
-    print(f"Number of records = {number_of_records}")
-    print("--------------------------\n\n")
-    print_nodes()
-
-    chosen_record_files = get_required_records()
-    add_records(chosen_record_files)
+    get_required_records()
 
     one_third = pow(2, 10) / 3
     two_third = one_third * 2
     three_third = pow(2, 10)
-    random_key = int.from_bytes(os.urandom(2), byteorder='big', signed=False) % pow(2,10)
-    print("Random Key:", random_key)
 
     response = requests.get(f"http://127.0.0.1:500/chord/lookup?key={one_third}")
     one_third_node = response.json()['successor']
@@ -158,26 +148,37 @@ def main(argv):
     print("\nThree thirds of chord ring:", three_third)
     print(f"Successor of three thirds: {three_third_node}")
 
-    start_one = time.time()
-    response = requests.get(f"http://{one_third_node}/chord/lookup?key={random_key}")
-    end_one_s = time.time() - start_one
-    print(f"Successor: {response.json()['successor']}")
+    print(f"\nNumber of nodes = {number_of_nodes}")
+    while len(all_records) != 0:
+        add_records(all_records[0:25])
+        print(f">> Testing with {len(records_on_network)} records")
 
-    start_two = time.time()
-    response = requests.get(f"http://{two_third_node}/chord/lookup?key={random_key}")
-    end_two_s = time.time() - start_two
-    print(f"Successor: {response.json()['successor']}")
+        random_key = int.from_bytes(os.urandom(2), byteorder='big', signed=False) % pow(2,10)
+        print("     Random Key:", random_key)
 
-    start_three = time.time()
-    response = requests.get(f"http://{three_third_node}/chord/lookup?key={random_key}")
-    end_three_s = time.time() - start_three
-    print(f"Successor: {response.json()['successor']}")
+        start_one = time.time()
+        response = requests.get(f"http://{one_third_node}/chord/lookup?key={random_key}")
+        end_one_s = time.time() - start_one
+        print(f"     Successor: {response.json()['successor']}")
 
-    print("\nFirst Lookup:", end_one_s)
-    print("Second Lookup:", end_two_s)
-    print("Third Lookup:", end_three_s)
-    average = (end_one_s + end_two_s + end_three_s) / 3.0
-    print("Average:", average)
+        start_two = time.time()
+        response = requests.get(f"http://{two_third_node}/chord/lookup?key={random_key}")
+        end_two_s = time.time() - start_two
+        print(f"     Successor: {response.json()['successor']}")
+
+        start_three = time.time()
+        response = requests.get(f"http://{three_third_node}/chord/lookup?key={random_key}")
+        end_three_s = time.time() - start_three
+        print(f"     Successor: {response.json()['successor']}")
+
+        print("\n     First Lookup:", end_one_s)
+        print("     Second Lookup:", end_two_s)
+        print("     Third Lookup:", end_three_s)
+        average = (end_one_s + end_two_s + end_three_s) / 3.0
+        print("     Average:", average)
+
+        timings[len(records_on_network)] = average
+    print(timings)
 
 
 if __name__ == '__main__':
