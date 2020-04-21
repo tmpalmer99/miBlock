@@ -1,54 +1,47 @@
 # miBlock - User Manual
 ## Prerequisites
 ### Installing Docker
-**1.** Update the apt package index and install packages to allow apt to use a repository over HTTPS:
-
-<div>
+**1.** Use apt command to install the docker.io package:
 
 ```
-$ sudo apt-get update
-$ sudo apt-get install apt-transport-https ca-certificates curl gnupg-agent software-properties-common
+$ sudo apt install docker.io
 ```
 
- </div>
-
-**2.** Add Docker’s official GPG key:
-
+**2.** Start docker and enable it to start after the system reboot:
 ```
-$ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+$ sudo systemctl enable --now docker
 ```
 
-**3.** Verify that you now have the key with the fingerprint 9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88, by searching for the last 8 characters of the fingerprint.
-
-```
- $ sudo apt-key fingerprint 0EBFCD88
-
-Output:
--------
-pub   rsa4096 2017-02-22 [SCEA]
-      9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88
-uid           [ unknown] Docker Release (CE deb) <docker@docker.com>
-sub   rsa4096 2017-02-22 [S]
-```
-**4.** Use the following command to set up the stable repository.
-```
-$ sudo add-apt-repository \
-   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-   zesty \
-   stable"
-```
-
-**5.** Update the apt package index, and install the latest version of Docker Engine and containerd, or go to the next step to install a specific version:
-```
-$ sudo apt-get update
-$ sudo apt-get install docker-ce docker-ce-cli containerd.io
-```
-
-**6.** In order to use a virtual environment, make sure docker runs without sudo
+**3.** In order to use a virtual environment, make sure docker runs without sudo:
 ```
 $ sudo groupadd docker
 $ sudo gpasswd -a $USER docker
 $ newgrp docker
+```
+**4.** Run docker test using the hello-world container:
+```
+$ docker run hello-world
+
+Hello from Docker!
+This message shows that your installation appears to be working correctly.
+
+To generate this message, Docker took the following steps:
+ 1. The Docker client contacted the Docker daemon.
+ 2. The Docker daemon pulled the "hello-world" image from the Docker Hub.
+    (amd64)
+ 3. The Docker daemon created a new container from that image which runs the
+    executable that produces the output you are currently reading.
+ 4. The Docker daemon streamed that output to the Docker client, which sent it
+    to your terminal.
+
+To try something more ambitious, you can run an Ubuntu container with:
+ $ docker run -it ubuntu bash
+
+Share images, automate workflows, and more with a free Docker ID:
+ https://hub.docker.com/
+
+For more examples and ideas, visit:
+ https://docs.docker.com/get-started/
 ```
 ### Installing pip3 and virtualenv
 ```
@@ -74,9 +67,40 @@ $ source miBlockVenv/bin/activate
 $ pip3 install prettytable
 $ pip3 install requests
 ```
-## Running miBlock
-**1.** With the virtual environment still activated, from the root directory of the miBlock repository a network can be created by executing the following script (the first time this execute it will take a few minutes to produce the docker image):
+# Running miBlock
+**1.** With the virtual environment still activated, from the root directory of the miBlock repository a network can be created by executing the following script (the first time this is executed it will take a few minutes to produce the docker image):
 ```
 $ ./create_network.sh n    <- n here is the number of nodes we want to have in the network
 ```
-**2.** If the environment has been successfully setup then the client should now be running and all available commands are clearly outlined to the user
+![Create Network](https://github.com/tmpalmer99/miBlock/blob/master/demo/images/createscript.png)
+
+**2.** If the environment has been successfully setup then the client should now be running and all commands available to the user will be outlined.
+
+# Using miBlock
+Upon running the demonstration client succesfully, the user has the ability to login to a node, register a single node or all nodes, and list available nodes:
+
+![Login](https://github.com/tmpalmer99/miBlock/blob/master/demo/images/login.png)
+
+Once a user logs in to a node to send requests on their behalf, they are faced with the following available commands.
+
+![Commands](https://github.com/tmpalmer99/miBlock/blob/master/demo/images/client_commands.png)
+
+## Mining Procedure
+
+The steps necessary in the mining procedure are:
+1. login in to a node
+2. execute the 'record' command
+3. (optional) execute the 'show-examples' command to list available records to add
+4. add any number of records using the 'add' command
+5. once records are added return to the command menu
+6. execute the 'mine' command
+7. (optional) print the blockchain using 'chain'
+
+![Mining](https://github.com/tmpalmer99/miBlock/blob/master/demo/images/mining.png)
+
+## Using Chord
+
+Given that a user has logged into a node, the 'chord' command can be executed to show the menu for all chord related commands. An example is show below of a look-up operation for key 500.
+
+
+![Chord](https://github.com/tmpalmer99/miBlock/blob/master/demo/images/chord_lookup.png)
