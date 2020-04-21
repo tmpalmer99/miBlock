@@ -34,7 +34,7 @@ sub   rsa4096 2017-02-22 [S]
 ```
 $ sudo add-apt-repository \
    "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-   $(lsb_release -cs) \
+   zesty \
    stable"
 ```
 
