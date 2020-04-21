@@ -43,9 +43,3 @@ def notify_successor(successor_address, node_address):
 def stabalise_node(node_address):
     response = requests.get(f"http://{node_address}/chord/stabalise")
     return response.status_code == 200
-
-
-def ping_address(address):
-    # Ping address to check their status
-    response = requests.get(f"http://{address}/chord/ping")
-    return response.status_code == 200

@@ -27,14 +27,14 @@ docker build -t miblock:latest . > /dev/null 2>&1
 echo -e ">> Creating $1 docker container(s)"
 for (( i=0; i<$1; i++ ))
 do
-	echo -e ">> Docker @ port 500$i with name container$((i+1))"
-	docker run --name container$((i+1)) -p 500$i:5000 -d miblock
+	echo -e ">> Docker @ port 50$i with name container$((i+1))"
+	docker run --name container$((i+1)) -p 50$i:5000 -d miblock
 done
 
 sleep 1
 
-echo -e ">> Initialising discover node '127.0.0.1:5000'"
-curl http://127.0.0.1:5000/discovery/initialise
+echo -e ">> Initialising discover node '127.0.0.1:500'"
+curl http://127.0.0.1:500/discovery/initialise
 echo -e ""
 
 echo -e ">> Running client"

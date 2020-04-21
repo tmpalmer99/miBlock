@@ -16,6 +16,7 @@ RUN mkdir -p /app/miBlock
 COPY . /app/miBlock
 
 RUN mkdir -p /app/miBlock/data/records/used
+RUN mkdir -p /app/miBlock/blockchain/logs
 
 WORKDIR /app
 

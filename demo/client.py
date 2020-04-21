@@ -1,8 +1,8 @@
 import getopt
 import json
+import math
 import os
 import sys
-import math
 
 import requests
 from prettytable import PrettyTable
@@ -45,10 +45,10 @@ def main(argv):
         elif opt == "-n":
             number_of_nodes = arg
             for i in range(int(arg)):
-                if requests.get(f"http://127.0.0.1:500{i}/node/ping").status_code == 200:
-                    nodes_registered.append(f"127.0.0.1:500{i}")
+                if requests.get(f"http://127.0.0.1:50{i}/node/ping").status_code == 200:
+                    nodes_registered.append(f"127.0.0.1:50{i}")
                 else:
-                    nodes_not_registered.append(f"127.0.0.1:500{i}")
+                    nodes_not_registered.append(f"127.0.0.1:50{i}")
     while True:
         if main_menu() == 1:
 
@@ -63,14 +63,14 @@ def main(argv):
 
 
 def print_logo():
-    logo_path = str(chain_utils.get_app_root_directory()) + "/miBlock_ascii_logo"
+    logo_path = str(chain_utils.get_app_root_directory()) + "/demo/images/miBlock_ascii_logo"
     logo_file = open(logo_path, 'r+')
     logo = logo_file.read()
     print(logo)
 
 
 def print_chord_heading():
-    logo_path = str(chain_utils.get_app_root_directory()) + "/chord_heading"
+    logo_path = str(chain_utils.get_app_root_directory()) + "/demo/images/chord_heading"
     logo_file = open(logo_path, 'r+')
     logo = logo_file.read()
     print(logo)
@@ -137,7 +137,6 @@ def main_menu():
                 print_success(f"Registration was successful for node '{node}'")
 
         elif command == "register_all":
-            print(nodes_not_registered)
             for node in nodes_not_registered:
                 response = requests.post(f"http://{node}/node/register?node_address=172.17.0.1:{node.split(':')[1]}")
                 if response.status_code != 200:
@@ -240,6 +239,7 @@ def get_peers():
 def manage_record_pool():
     print(f"Use the '{colours.COMMAND}add{colours.ENDCOLOUR}'    command to add a record to the record pool.")
     print(f"Use the '{colours.COMMAND}list{colours.ENDCOLOUR}'   command to list a node's record pool.")
+    print(f"Use the '{colours.COMMAND}sync{colours.ENDCOLOUR}'   command to synchronise a node's record pool with its peers.")
     print(f"Use the '{colours.COMMAND}return{colours.ENDCOLOUR}' command to return to node menu.")
     while True:
         command = input(" \n>> ")
@@ -247,6 +247,8 @@ def manage_record_pool():
             add_record()
         elif command == "list":
             list_record()
+        elif command == "sync":
+            sync_record_pool()
         elif command == "return":
             return
         else:
@@ -285,6 +287,14 @@ def list_record():
         client_utils.print_records(records)
 
 
+def sync_record_pool():
+    response = requests.get(f"http://{active_node}/chain/sync/record-pool")
+    if response.status_code == 200:
+        print_success("Record pool successfully synced")
+    else:
+        print_error("Something went wrong, please try again")
+
+
 def mine_block():
     chain_consensus()
     response = requests.get(f"http://{active_node}/chain/mine")
@@ -304,13 +314,14 @@ def verify_record():
     else:
         print_error("This file has been tampered with")
 
+
 def manage_chord_requests():
     os.system('clear')
     print_chord_heading()
     print(f"Use the '{colours.COMMAND}successor{colours.ENDCOLOUR}'      command to print node's successor.")
-    print(f"Use the '{colours.COMMAND}successor-list{colours.ENDCOLOUR}' command to print node's successor list.")
     print(f"Use the '{colours.COMMAND}predecessor{colours.ENDCOLOUR}'    command to print node's predecessor.")
-    print(f"Use the '{colours.COMMAND}lookup{colours.ENDCOLOUR}'         command to lookup a key's successor.")
+    print(f"Use the '{colours.COMMAND}lookup-file{colours.ENDCOLOUR}'    command to lookup a files's successor.")
+    print(f"Use the '{colours.COMMAND}lookup-key{colours.ENDCOLOUR}'     command to lookup a key's successor.")
     print(f"Use the '{colours.COMMAND}file{colours.ENDCOLOUR}'           command to see if a node owns a file.")
     print(f"Use the '{colours.COMMAND}table{colours.ENDCOLOUR}'          command to print node's finger table.")
     print(f"Use the '{colours.COMMAND}files{colours.ENDCOLOUR}'          command to print node's stored files.")
@@ -321,12 +332,12 @@ def manage_chord_requests():
         command = input("\n>>> ")
         if command == "successor":
             chord_successor()
-        elif command == "successor-list":
-            chord_successor_list()
         elif command == "predecessor":
             chord_predecessor()
-        elif command == "lookup":
-            chord_lookup()
+        elif command == "lookup-file":
+            chord_file_lookup()
+        elif command == "lookup-key":
+            chord_key_lookup()
         elif command == "file":
             node_has_file()
         elif command == "table":
@@ -357,17 +368,18 @@ def chord_successor():
         print_error("Something went wrong, please try again")
 
 
-def chord_successor_list():
-    response = requests.get(f"http://{active_node}/chord/successor-list")
+def chord_file_lookup():
+    file = input("Filename: ")
+    response = requests.get(f"http://{active_node}/chord/lookup?key={chord_utils.get_hash(file)}")
     if response.status_code == 200:
-        print(f"Successor: {response.json()['successor-list']}")
+        print(f"{response.json()['successor']}")
     else:
         print_error("Something went wrong, please try again")
 
 
-def chord_lookup():
-    file = input("Filename: ")
-    response = requests.get(f"http://{active_node}/chord/lookup?key={chord_utils.get_hash(file)}")
+def chord_key_lookup():
+    key = input("key: ")
+    response = requests.get(f"http://{active_node}/chord/lookup?key={key}")
     if response.status_code == 200:
         print(f"{response.json()['successor']}")
     else:
@@ -412,8 +424,8 @@ def print_stored_files():
 
 
 def chord_nodes():
-    response = requests.get(f"http://127.0.0.1:5000/discovery/peers")
-    print(f"Node - 172.17.0.1:5000 @ '{chord_utils.get_hash('172.17.0.1:5000')}'")
+    response = requests.get(f"http://127.0.0.1:500/discovery/peers")
+    print(f"Node - 172.17.0.1:500 @ '{chord_utils.get_hash('172.17.0.1:500')}'")
     for peer in response.json()['peers']:
         print(f"Node - {peer} @ '{chord_utils.get_hash(peer)}'")
 
@@ -432,6 +444,7 @@ def chain_consensus():
         print_success("Chain consensus achieved")
     else:
         print_error("Something went wrong, please try again")
+
 
 def leave_network():
     response = requests.get(f"http://{active_node}/node/leave")

@@ -25,7 +25,7 @@ logger = chain_utils.init_logger("Node ")
 peers = []
 
 # Address of discovery node
-discovery_node_address = '172.17.0.1:5000'
+discovery_node_address = '172.17.0.1:500'
 
 # Address of node
 node_address = ''
@@ -36,9 +36,7 @@ blockchain = Blockchain()
 # Node's chord instance
 chord = None
 
-# Boolean to simulate a node failing or going offline
 online = False
-
 
 #                                                     /+=---------=+\
 # --------------------------------------------------=+|  Discovery  |+=-------------------------------------------------
@@ -53,10 +51,11 @@ def init_discover_node():
     # Initialising chord node on discovery node
     chord = Chord(discovery_node_address)
 
+    online = True
+
     # Setting node address to a global variable
     node_address = discovery_node_address
 
-    online = True
     return 'Discovery Node Initialised', 200
 
 
@@ -68,10 +67,6 @@ def get_known_peers():
     return json.dumps({'peers': peers}), 200
 
 
-#                                                  /+=---------------=+\
-# -----------------------------------------------=+|  Node Management  |+=----------------------------------------------
-#                                                  \+=---------------=+/
-
 # ---------------------------------------\
 #     Ping a node to check its status    |
 # ---------------------------------------/
@@ -80,8 +75,12 @@ def ping():
     if online:
         return 'OK', 200
     else:
-        return 'Node offline', 400
+        return 'Simulating Offline', 400
 
+
+#                                                  /+=---------------=+\
+# -----------------------------------------------=+|  Node Management  |+=----------------------------------------------
+#                                                  \+=---------------=+/
 
 # -------------------------------------------------\
 # Receive a record file from a peer in the network |
@@ -196,7 +195,7 @@ def accept_peer():
 # ----------------------------------------------------------------/
 @app.route('/node/register', methods=['POST'])
 def register_node():
-    global node_address, chord
+    global node_address, chord, online
 
     logger.info("Node is registering itself on the network")
 
@@ -220,12 +219,14 @@ def register_node():
     # Save received chain to node
     blockchain.chain = chain_utils.get_chain_from_json(response.json()['chain'])
 
+    online = True
+
     # Add received peers to global list of known peers
     for response_peer in response.json()['peers']:
         peers.append(response_peer)
 
     # Join the Chord network
-    response = join_chord_network()
+    response = join_chord_network(node_address)
     if response != 0:
         return response, 400
 
@@ -238,35 +239,6 @@ def register_node():
 @app.route('/node/hostname', methods=['GET'])
 def get_node_hostname():
     return json.dumps({'hostname': socket.gethostbyname(socket.gethostname())}), 200
-
-
-@app.route('/node/leave', methods=['GET'])
-def leave_network():
-    global online
-    broadcast_peer_sync(broadcast=True)
-
-    moved_files, files_to_move = 0, 0
-    if len(chord.stored_files) != 0:
-        # Move our files to successor
-        files_to_move = len(chord.stored_files)
-        for file in chord.stored_files:
-            if file_transfer_handler(chord.successor, file):
-                moved_files += 1
-        chord.stored_files = []
-
-    response = requests.get(f"http://{chord.predecessor}/chord/stabalise")
-
-    online = False
-    broadcast_chord_update(peers)
-    broadcast_peer_sync(broadcast=True)
-    if response.status_code == 200:
-        # Return success if all files transferred
-        if moved_files == files_to_move:
-            return 'OK', 200
-        else:
-            return 'Not all files transferred to successor', 400
-    else:
-        return response.reason, 400
 
 
 #                                                    /+=----------=+\
@@ -422,6 +394,7 @@ def verify_record():
 
 # ------------------------------------------------[Chain Synchronisation]-----------------------------------------------
 
+
 # -----------------------------------------------\
 #    Send a new unverified record to all peers   |
 # -----------------------------------------------/
@@ -451,6 +424,28 @@ def sync_peers():
     # Sync node's peer list by requesting other node's peer lists
     broadcast_peer_sync()
     return 'Synced peers', 200
+
+
+# ---------------------------------------------------------------------------------\
+# Ask peers for their record pools to get an up to date list of unverified records |
+# ---------------------------------------------------------------------------------/
+@app.route('/chain/sync/record-pool', methods=['GET'])
+def sync_record_pool():
+
+    # Sync node's peer list by requesting other node's peer lists
+    for peer in peers:
+        response = requests.get(f"http://{peer}/chain/record-pool")
+        if response.status_code == 200 and response.json()['length'] != 0:
+            json_records = response.json()['records']
+            records = []
+            for json_record in json_records:
+                record = block_utils.get_record_object_from_dict(json_record, stored=False)
+                records.append(record)
+            for record in records:
+                blockchain.record_pool.add_record(record)
+        else:
+            return 'Failure whilst synchronising record pool', 400
+    return 'Synced record pool', 200
 
 
 # ----------------------------------------------------------------------------\
@@ -503,15 +498,6 @@ def get_successor():
     return json.dumps({'successor': chord.successor}), 200
 
 
-# -------------------------------------------------\
-#        Gets the node's chord successor list      |
-# -------------------------------------------------/
-@app.route('/chord/successor-list', methods=['GET'])
-def get_successor_list():
-    logger.info("Node was asked to return its chord predecessor")
-    return json.dumps({'successor-list': [chord.successor, chord.successors_successor]}), 200
-
-
 # -----------------------------------------------------\
 # Notifies a chord node of a new potential predecessor |
 # -----------------------------------------------------/
@@ -528,10 +514,10 @@ def notify():
             # We have no predecessor, set our predecessor as the potential predecessor
             logger.info(f"Node has new predecessor '{potential_predecessor}'")
             chord.predecessor = potential_predecessor
-        elif requests.get(f"http://{chord.predecessor}/node/ping").status_code == 400:
-            chord.predecessor = potential_predecessor
+            chord_utils.stabalise_node(node_address)
         elif chord_utils.get_hash(chord.predecessor) < potential_predecessor_hash < chord.node_id or \
-                chord.node_id < chord_utils.get_hash(chord.predecessor) < potential_predecessor_hash:
+                chord.node_id < chord_utils.get_hash(chord.predecessor) < potential_predecessor_hash or \
+                potential_predecessor_hash < chord.node_id < chord_utils.get_hash(chord.predecessor):
             logger.info(f"Node has new predecessor '{potential_predecessor}'")
             old_predecessor = chord.predecessor
             chord.predecessor = potential_predecessor
@@ -578,13 +564,16 @@ def get_finger_table():
 def check_file_successors():
     moved_files = 0
     files_to_move = len(chord.stored_files)
+    logger.info(f"Node has {files_to_move} files to move")
     for file in chord.stored_files:
         file_successor = chord.find_successor(chord_utils.get_hash(file))
+        logger.info(f"Successor of key '{chord_utils.get_hash(file)}' is '{file_successor}'")
 
-        if file_successor != node_address:
+        if file_successor == node_address:
             moved_files += 1
         else:
             if file_transfer_handler(file_successor, file):
+                chord.stored_files.remove(file)
                 moved_files += 1
 
     return f"'{moved_files}' out of '{files_to_move}' file(s) transferred", 200
@@ -621,17 +610,13 @@ def peer_chain_consensus():
 
     # Request chain from each peer
     for peer in peers:
-        if requests.get(f"http://{peer}/node/ping").status_code == 400:
-            if peer in peers:
-                peers.remove(peer)
-        else:
-            headers = {'Content-Type': "application/json"}
-            response = requests.get(f"http://{peer}/chain", headers=headers)
-            # If peer's chain is longer and valid, update chain
-            if response.json()['length'] > len(blockchain.chain) and \
-                    blockchain.is_chain_valid():
-                blockchain.chain = chain_utils.get_chain_from_json(response.json()['chain'])
-                updated_chain = True
+        headers = {'Content-Type': "application/json"}
+        response = requests.get(f"http://{peer}/chain", headers=headers)
+        # If peer's chain is longer and valid, update chain
+        if response.json()['length'] > len(blockchain.chain) and \
+                blockchain.is_chain_valid():
+            blockchain.chain = chain_utils.get_chain_from_json(response.json()['chain'])
+            updated_chain = True
 
     if updated_chain:
         if os.path.exists(chain_utils.path_to_stored_chain()):
@@ -645,10 +630,7 @@ def broadcast_block_to_peers(block):
     headers = {'Content-Type': "application/json"}
 
     for peer in peers:
-        if requests.get(f"http://{peer}/node/ping").status_code == 400:
-            peers.remove(peer)
-        else:
-            requests.post(f"http://{peer}/chain/add-block", data=json.dumps(data), headers=headers)
+        requests.post(f"http://{peer}/chain/add-block", data=json.dumps(data), headers=headers)
 
 
 # Tells known peers to update their finger tables
@@ -671,10 +653,7 @@ def broadcast_record_to_peers(record):
 
     # Send unverified record to all known peer's in the network
     for peer in peers:
-        if requests.get(f"http://{peer}/node/ping").status_code == 400:
-            peers.remove(peer)
-        else:
-            requests.post(f"http://{peer}/chain/sync/record", data=json.dumps(data), headers=headers)
+        requests.post(f"http://{peer}/chain/sync/record", data=json.dumps(data), headers=headers)
 
 
 # Send a maintenance record to it's successor
@@ -722,37 +701,37 @@ def initialise_receiving_peer(successor_node, filename):
 
 
 def file_transfer_handler(file_successor, filename, stored=True):
-    if file_successor != node_address:
-        if stored:
-            # Record already verified
-            block_utils.stored_maintenance_record_exists(filename)
-            file_path = block_utils.path_to_stored_record(filename)
-        elif not stored:
-            # Record not verified
-            block_utils.unused_maintenance_record_exists(filename)
-            file_path = block_utils.path_to_unused_record(filename)
-        else:
-            return "File doesn't exist", 400
+    logger.info(f"Transferring file '{filename}' to '{file_successor}'")
+    if stored:
+        # Record already verified
+        block_utils.stored_maintenance_record_exists(filename)
+        file_path = block_utils.path_to_stored_record(filename)
+    elif not stored:
+        # Record not verified
+        block_utils.unused_maintenance_record_exists(filename)
+        file_path = block_utils.path_to_unused_record(filename)
+    else:
+        return "File doesn't exist", 400
 
-        # Get hostname of file successor to set up a socket connection
-        logger.debug("Requesting file successors hostname")
-        successor_hostname = requests.get(f"http://{file_successor}/node/hostname").json()['hostname']
-        logger.info(f"Received file successors hostname '{successor_hostname}'")
+    # Get hostname of file successor to set up a socket connection
+    logger.debug("Requesting file successors hostname")
+    successor_hostname = requests.get(f"http://{file_successor}/node/hostname").json()['hostname']
+    logger.info(f"Received file successors hostname '{successor_hostname}'")
 
-        # Creating threads to setup server peer and client peer
-        t1 = threading.Thread(target=initialise_receiving_peer, args=(file_successor, filename))
-        t2 = threading.Thread(target=send_file_to_peer, args=(successor_hostname, file_path))
+    # Creating threads to setup server peer and client peer
+    t1 = threading.Thread(target=initialise_receiving_peer, args=(file_successor, filename))
+    t2 = threading.Thread(target=send_file_to_peer, args=(successor_hostname, file_path))
 
-        # Start threads
-        logger.info(f"Asking file successor to set up server connection at '{file_successor}'")
-        t1.start()
-        # Allow time for server setup
-        time.sleep(1)
-        t2.start()
+    # Start threads
+    logger.info(f"Asking file successor to set up server connection at '{file_successor}'")
+    t1.start()
+    # Allow time for server setup
+    time.sleep(1)
+    t2.start()
 
-        # Join threads
-        t1.join()
-        t2.join()
+    # Join threads
+    t1.join()
+    t2.join()
 
     response = requests.get(f"http://{file_successor}/node/file?filename={filename}")
     return response.status_code == 200
@@ -761,18 +740,14 @@ def file_transfer_handler(file_successor, filename, stored=True):
 def broadcast_peer_sync(broadcast=False):
     # Sync node's peer list by requesting other node's peer lists
     for peer in peers:
-        if requests.get(f"http://{peer}/node/ping").status_code == 400:
-            peers.remove(peer)
-        else:
-            response = requests.get(f"http://{peer}/discovery/peers")
-            for response_peer in response.json()['peers']:
-                if response_peer not in peers and response_peer != node_address:
-                    peers.append(response_peer)
+        response = requests.get(f"http://{peer}/discovery/peers")
+        for response_peer in response.json()['peers']:
+            if response_peer not in peers and response_peer != node_address:
+                peers.append(response_peer)
 
     if broadcast:
         for peer in peers:
             requests.get(f"http://{peer}/chain/sync/peers")
-
 
 #                                                 /+=-------------------=+\
 # ----------------------------------------------=+|   Utility Functions   |+=-------------------------------------------
@@ -807,19 +782,14 @@ def generate_block_from_request(block_json):
 
 
 # Allows a node to join the chord network
-def join_chord_network():
-    global chord, online
+def join_chord_network(address):
+    global chord
     # Initialising chord node
-    chord = Chord(node_address)
-    online = True
+    chord = Chord(address)
 
     # Notify node's successor of our existence
     logger.info("Notifying our successor")
     chord_utils.notify_successor(chord.successor, chord.node_address)
-
-    # Tell successor to stabalise
-    logger.info("Stabalising our successor")
-    chord_utils.stabalise_node(chord.successor)
 
     # Predecessor and successor points are correct, fix finger tables of effected nodes
     logger.info("Fixing our finger table")
