@@ -3,6 +3,8 @@ import json
 import math
 import os
 import sys
+from os import listdir
+from os.path import isfile, join
 
 import requests
 from prettytable import PrettyTable
@@ -237,10 +239,11 @@ def get_peers():
 
 
 def manage_record_pool():
-    print(f"Use the '{colours.COMMAND}add{colours.ENDCOLOUR}'    command to add a record to the record pool.")
-    print(f"Use the '{colours.COMMAND}list{colours.ENDCOLOUR}'   command to list a node's record pool.")
-    print(f"Use the '{colours.COMMAND}sync{colours.ENDCOLOUR}'   command to synchronise a node's record pool with its peers.")
-    print(f"Use the '{colours.COMMAND}return{colours.ENDCOLOUR}' command to return to node menu.")
+    print(f"Use the '{colours.COMMAND}add{colours.ENDCOLOUR}'           command to add a record to the record pool.")
+    print(f"Use the '{colours.COMMAND}list{colours.ENDCOLOUR}'          command to list a node's record pool.")
+    print(f"Use the '{colours.COMMAND}sync{colours.ENDCOLOUR}'          command to synchronise a node's record pool with its peers.")
+    print(f"Use the '{colours.COMMAND}show-examples{colours.ENDCOLOUR}' command to list example records available for use in miBlock.")
+    print(f"Use the '{colours.COMMAND}return{colours.ENDCOLOUR}'        command to return to node menu.")
     while True:
         command = input(" \n>> ")
         if command == "add":
@@ -249,6 +252,8 @@ def manage_record_pool():
             list_record()
         elif command == "sync":
             sync_record_pool()
+        elif command == "show-examples":
+            list_all_records()
         elif command == "return":
             return
         else:
@@ -285,6 +290,14 @@ def list_record():
             record = block_utils.get_record_object_from_dict(json_record, stored=False)
             records.append(record)
         client_utils.print_records(records)
+
+
+def list_all_records():
+    path = str(chain_utils.get_app_root_directory()) + "/data/records/unused"
+    all_records = [f for f in listdir(path) if isfile(join(path, f))][0:300]
+    for record in all_records:
+        if record.split(".")[1] == "pdf":
+            print(" -", record)
 
 
 def sync_record_pool():
