@@ -72,6 +72,13 @@ $ pip3 install requests
 ```
 $ ./create_network.sh n    <- n here is the number of nodes we want to have in the network
 ```
+If this command fails with permission denied, run the following commands again with venv activated
+```
+$ sudo groupadd docker
+$ sudo gpasswd -a $USER docker
+$ newgrp docker
+```
+
 ![Create Network](https://github.com/tmpalmer99/miBlock/blob/master/demo/images/createscript.png)
 
 **2.** If the environment has been successfully setup then the client should now be running and all commands available to the user will be outlined.
