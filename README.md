@@ -1,5 +1,4 @@
-# miBlock
-# User Manual
+# miBlock - User Manual
 ## Prerequisites
 ### Installing Docker
 **1.** Update the apt package index and install packages to allow apt to use a repository over HTTPS:
